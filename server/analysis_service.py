@@ -19,6 +19,12 @@ import os
 import sys
 import json
 import math
+
+# Windows 本地 QGIS Python PROJ 資料庫相容設定
+if "PROJ_DATA" not in os.environ and os.path.exists(r"C:\Program Files\QGIS 4.2.2\share\proj"):
+    os.environ["PROJ_DATA"] = r"C:\Program Files\QGIS 4.2.2\share\proj"
+    os.environ["PROJ_LIB"] = r"C:\Program Files\QGIS 4.2.2\share\proj"
+
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import geopandas as gpd
 import pandas as pd
@@ -31,6 +37,16 @@ DATA_DIR = os.path.join(BASE_DIR, "public", "data")
 
 # 記憶體快取：各縣市已載入圖資與空間索引
 CACHE = {}
+
+# 系統評鑑權重與門檻預設值 (支援維護者線上微調)
+EVAL_CONFIG = {
+    "weight_walk": 0.45,
+    "weight_safety": 0.10,
+    "weight_live": 0.45,
+    "threshold_width": 1.5
+}
+
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin888")
 
 from shapely import force_2d
 
@@ -233,7 +249,7 @@ def perform_spatial_analysis(county, polygon_geom_wgs84):
                 w = float(row.get('SWW_WTH', 0))
                 if w > 0:
                     widths.append(w)
-                if w < 1.5:
+                if w < EVAL_CONFIG.get("threshold_width", 1.5):
                     insufficient_length += seg_len
                     
                 tot_area += float(row.get('SW_AREA', 0))
@@ -372,8 +388,11 @@ def perform_spatial_analysis(county, polygon_geom_wgs84):
     poi_score = min(100.0, (scoreable_poi_cnt / 40.0) * 100.0)
     i_live = round(0.30 * pop_score + 0.70 * poi_score, 1)
     
-    # (4) 正面評估版 V2 總分 (TOTAL_SC, 滿分100，越高越優良)
-    total_score = round(0.45 * weighted_walk_score + 0.10 * s_safety + 0.45 * i_live, 1)
+    # (4) 人本步行環境評估總分 (滿分100，越高越優良，支援管理員動態調權)
+    w_walk = EVAL_CONFIG.get("weight_walk", 0.45)
+    w_safe = EVAL_CONFIG.get("weight_safety", 0.10)
+    w_live = EVAL_CONFIG.get("weight_live", 0.45)
+    total_score = round(w_walk * weighted_walk_score + w_safe * s_safety + w_live * i_live, 1)
     
     # 正面評估五級分級制 (A~E)
     if total_score >= 80:
@@ -410,12 +429,26 @@ class WebGISRequestHandler(SimpleHTTPRequestHandler):
         elif self.path == '/api/status':
             self._send_json({"status": "ready", "cached_counties": list(CACHE.keys())})
             return
+        elif self.path == '/api/admin/status':
+            county_data = CACHE.get("kaohsiung", {})
+            layer_stats = {}
+            for k, v in county_data.items():
+                if hasattr(v, '__len__'):
+                    layer_stats[k] = len(v)
+            self._send_json({
+                "status": "online",
+                "weights": EVAL_CONFIG,
+                "layer_stats": layer_stats,
+                "cached_counties": list(CACHE.keys())
+            })
+            return
         return super().do_GET()
 
     def do_POST(self):
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else "{}"
+
         if self.path == '/api/analysis':
-            content_length = int(self.headers.get('Content-Length', 0))
-            body = self.rfile.read(content_length).decode('utf-8')
             try:
                 req = json.loads(body)
                 county = req.get('county', 'kaohsiung')
@@ -430,6 +463,91 @@ class WebGISRequestHandler(SimpleHTTPRequestHandler):
                 traceback.print_exc()
                 self._send_json({"error": str(e)}, status=500)
             return
+
+        elif self.path == '/api/admin/login':
+            try:
+                req = json.loads(body)
+                pwd = req.get('password', '')
+                if pwd == ADMIN_PASSWORD:
+                    self._send_json({"success": True, "token": "admin-session-ok"})
+                else:
+                    self._send_json({"success": False, "error": "管理員密碼錯誤，請重新輸入"}, status=401)
+            except Exception as e:
+                self._send_json({"error": str(e)}, status=500)
+            return
+
+        elif self.path == '/api/admin/reload_cache':
+            try:
+                county = "kaohsiung"
+                if county in CACHE:
+                    del CACHE[county]
+                load_county_data(county)
+                self._send_json({"success": True, "message": "圖資快取已重新預熱完成"})
+            except Exception as e:
+                self._send_json({"error": str(e)}, status=500)
+            return
+
+        elif self.path == '/api/admin/update_weights':
+            try:
+                req = json.loads(body)
+                for k in ["weight_walk", "weight_safety", "weight_live", "threshold_width"]:
+                    if k in req:
+                        EVAL_CONFIG[k] = float(req[k])
+                self._send_json({"success": True, "weights": EVAL_CONFIG})
+            except Exception as e:
+                self._send_json({"error": str(e)}, status=500)
+            return
+
+        elif self.path == '/api/admin/upload_layer':
+            try:
+                req = json.loads(body)
+                county = req.get('county', 'kaohsiung')
+                layer_key = req.get('layer_key')
+                geojson_data = req.get('geojson')
+
+                file_map = {
+                    "sidewalk": "sidewalk.geojson",
+                    "poi": "poi.geojson",
+                    "accidents": "accidents.geojson",
+                    "road_priority": "road_priority.geojson",
+                    "population_bsa": "population_bsa.geojson",
+                    "town_boundary": "town_boundary.geojson",
+                    "village_boundary": "village_boundary.geojson"
+                }
+
+                if not layer_key or layer_key not in file_map:
+                    self._send_json({"error": f"不支援的圖資分類: {layer_key}"}, status=400)
+                    return
+                if not geojson_data or not isinstance(geojson_data, dict):
+                    self._send_json({"error": "無效的 GeoJSON 資料格式"}, status=400)
+                    return
+
+                filename = file_map[layer_key]
+                target_path = os.path.join(DATA_DIR, county, filename)
+                with open(target_path, 'w', encoding='utf-8') as f:
+                    json.dump(geojson_data, f, ensure_ascii=False)
+
+                # 若為人行道，同步更新 .gz 壓縮檔
+                if layer_key == "sidewalk":
+                    import gzip
+                    gz_path = os.path.join(DATA_DIR, county, "sidewalk.geojson.gz")
+                    with open(target_path, 'rb') as f_in, gzip.open(gz_path, 'wb', compresslevel=6) as f_out:
+                        while chunk := f_in.read(1024 * 1024):
+                            f_out.write(chunk)
+
+                # 即時更新記憶體快取
+                if county in CACHE:
+                    del CACHE[county]
+                load_county_data(county)
+
+                cnt = len(geojson_data.get('features', []))
+                self._send_json({"success": True, "message": f"圖資 {filename} 更新成功！共 {cnt} 筆圖徵", "count": cnt})
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self._send_json({"error": str(e)}, status=500)
+            return
+
         self.send_error(404, "Endpoint not found")
 
     def _send_json(self, data, status=200):

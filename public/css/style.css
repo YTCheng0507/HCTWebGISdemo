@@ -685,3 +685,131 @@ body {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ========================================================================
+   【系統管理員登入與線上圖資維護後台彈窗樣式】
+   ======================================================================== */
+.admin-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.68);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.admin-modal-backdrop.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.admin-modal-box {
+  background: #ffffff;
+  border-radius: 12px;
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 48px);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.28);
+  border: 1px solid #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: scale(0.95);
+  transition: transform 0.2s ease;
+}
+
+.admin-modal-backdrop.show .admin-modal-box {
+  transform: scale(1);
+}
+
+.admin-modal-header {
+  padding: 14px 20px;
+  background: #0f172a;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.admin-modal-title {
+  font-size: 15.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-modal-close {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.admin-modal-close:hover {
+  color: #ffffff;
+}
+
+.admin-modal-tabs {
+  display: flex;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.admin-tab-btn {
+  flex: 1;
+  padding: 10px 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+
+.admin-tab-btn:hover {
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.admin-tab-btn.active {
+  color: #0284c7;
+  background: #ffffff;
+  border-bottom: 2px solid #0284c7;
+}
+
+.admin-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  font-size: 13.5px;
+  color: #334155;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-tab-pane {
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-tab-pane.active {
+  display: flex;
+}
+

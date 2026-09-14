@@ -72,6 +72,24 @@
         <input type="text" id="coord-input" placeholder="經緯度或 TWD97 X,Y" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #475569; background: #334155; color: #fff; font-size: 13px; width: 170px;" />
         <button id="btn-coord-locate" class="btn btn-secondary" style="padding: 5px 10px;">定位</button>
       </div>
+
+      <!-- 管理者按鈕 / 狀態區 -->
+      <div id="admin-nav-area" style="display: flex; align-items: center; gap: 6px; margin-left: 6px; border-left: 1px solid #475569; padding-left: 8px;">
+        <!-- 未登入狀態 -->
+        <button id="btn-open-login" class="btn btn-secondary" style="padding: 5px 10px; font-size: 13px; background: #334155; border: 1px solid #64748b; color: #f8fafc; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+          <span>🔐</span> 管理者登入
+        </button>
+        <!-- 已登入狀態 (預設隱藏) -->
+        <div id="admin-user-controls" style="display: none; align-items: center; gap: 6px;">
+          <span style="font-size: 11px; background: #16a34a; color: white; padding: 2px 8px; border-radius: 10px; font-weight: 600;">已登入</span>
+          <button id="btn-open-panel" class="btn btn-primary" style="padding: 5px 10px; font-size: 13px; background: #2563eb; color: #fff; cursor: pointer;">
+            🛠️ 維護後台
+          </button>
+          <button id="btn-admin-logout" class="btn" style="padding: 5px 8px; font-size: 12px; background: transparent; border: 1px solid #64748b; color: #94a3b8; cursor: pointer;">
+            登出
+          </button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -588,6 +606,161 @@
     </footer>
   </div>
 
+  <!-- 管理者登入彈窗 -->
+  <div id="modal-admin-login" class="admin-modal-backdrop">
+    <div class="admin-modal-box" style="width: 380px;">
+      <div class="admin-modal-header">
+        <div class="admin-modal-title">🔐 系統維護者登入</div>
+        <button id="btn-close-login" class="admin-modal-close" title="關閉">✕</button>
+      </div>
+      <div class="admin-modal-body">
+        <p style="color: #64748b; font-size: 13px; margin: 0;">
+          僅供系統維護人員登入進行圖資更新、評鑑權重調整與快取管理。一般大眾可直接關閉此視窗瀏覽查詢。
+        </p>
+        <div>
+          <label style="display: block; font-weight: 600; font-size: 13px; margin-bottom: 6px; color: #1e293b;">管理員密碼：</label>
+          <input type="password" id="admin-password-input" placeholder="請輸入管理密碼 (預設 admin888)" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 14px;" />
+        </div>
+        <div id="admin-login-error" style="display: none; color: #dc2626; font-size: 12.5px; background: #fef2f2; border: 1px solid #fecaca; padding: 6px 10px; border-radius: 4px;"></div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px;">
+          <button id="btn-cancel-login" class="btn" style="padding: 6px 14px; background: #e2e8f0; color: #475569; border: none; border-radius: 6px; cursor: pointer;">取消</button>
+          <button id="btn-submit-login" class="btn btn-primary" style="padding: 6px 18px; border-radius: 6px; font-weight: 600; cursor: pointer;">登入系統</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 管理者維護控制台彈窗 -->
+  <div id="modal-admin-panel" class="admin-modal-backdrop">
+    <div class="admin-modal-box" style="width: 620px;">
+      <div class="admin-modal-header">
+        <div class="admin-modal-title">🛠️ 人行環境平台 維護控制台</div>
+        <button id="btn-close-panel" class="admin-modal-close" title="關閉">✕</button>
+      </div>
+
+      <nav class="admin-modal-tabs">
+        <button class="admin-tab-btn active" data-admin-tab="admin-tab-upload">📁 圖資上傳更新</button>
+        <button class="admin-tab-btn" data-admin-tab="admin-tab-weights">⚙️ 評鑑權重調整</button>
+        <button class="admin-tab-btn" data-admin-tab="admin-tab-status">⚡ 系統快取與狀態</button>
+      </nav>
+
+      <div class="admin-modal-body">
+        <!-- 分頁 1: 圖資上傳 -->
+        <div id="admin-tab-upload" class="admin-tab-pane active">
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 13px; line-height: 1.6;">
+            💡 <strong>免用 Git / 命令列</strong>：直接在瀏覽器選擇欲更新的 GeoJSON 檔案即可完成線上置換！後台會自動刷新伺服器快取並即時渲染至地圖。
+          </div>
+
+          <div>
+            <label style="font-weight: 600; display: block; margin-bottom: 6px;">1. 選擇欲更新之縣市：</label>
+            <select id="admin-upload-county" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13.5px;">
+              <option value="kaohsiung">高雄市 (示範研究區)</option>
+            </select>
+          </div>
+
+          <div>
+            <label style="font-weight: 600; display: block; margin-bottom: 6px;">2. 選擇目標圖資類型：</label>
+            <select id="admin-upload-type" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13.5px;">
+              <option value="sidewalk">人行步道圖資 (sidewalk.geojson)</option>
+              <option value="accidents">交通事故統計 (accidents.geojson)</option>
+              <option value="poi">生活機能設施 POI (poi.geojson)</option>
+              <option value="road_priority">優先改善路段 (road_priority.geojson)</option>
+              <option value="population_bsa">人口統計與最小統計區 (population_bsa.geojson)</option>
+              <option value="town_boundary">行政區界線 (town_boundary.geojson)</option>
+              <option value="village_boundary">村里界線 (village_boundary.geojson)</option>
+            </select>
+          </div>
+
+          <div>
+            <label style="font-weight: 600; display: block; margin-bottom: 6px;">3. 選擇本機 GeoJSON 檔案：</label>
+            <input type="file" id="admin-upload-file" accept=".geojson,.json" style="width: 100%; font-size: 13px; padding: 6px; border: 1px dashed #94a3b8; border-radius: 6px; background: #fafafa; cursor: pointer;" />
+            <div id="admin-file-info" style="font-size: 12px; color: #64748b; margin-top: 4px;"></div>
+          </div>
+
+          <div id="admin-upload-status" style="display: none; padding: 8px 12px; border-radius: 6px; font-size: 13px;"></div>
+
+          <button id="btn-submit-upload" class="btn btn-primary" style="padding: 8px 16px; border-radius: 6px; font-weight: 600; align-self: flex-start; cursor: pointer;">
+            🚀 確認上傳並更新圖資
+          </button>
+        </div>
+
+        <!-- 分頁 2: 評鑑權重調整 -->
+        <div id="admin-tab-weights" class="admin-tab-pane">
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 13px; line-height: 1.6;">
+            💡 <strong>決策微調</strong>：調整後即時作用於所有「手繪框選」與「生活圈分析」，無需重新啟動伺服器。
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
+                <span>🚶 <strong>步行環境權重 (步道覆蓋、無障礙寬度、綠帶)</strong>:</span>
+                <span id="label-weight-walk" style="font-weight: 700; color: #2563eb;">45%</span>
+              </div>
+              <input type="range" id="input-weight-walk" min="0" max="100" value="45" step="5" style="width: 100%; accent-color: #2563eb;" />
+            </div>
+
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
+                <span>🛡️ <strong>交通安全權重 (行人交通事故密集度扣分)</strong>:</span>
+                <span id="label-weight-safety" style="font-weight: 700; color: #ef4444;">10%</span>
+              </div>
+              <input type="range" id="input-weight-safety" min="0" max="100" value="10" step="5" style="width: 100%; accent-color: #ef4444;" />
+            </div>
+
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
+                <span>🏪 <strong>生活機能權重 (POI 步行易達性與多樣性)</strong>:</span>
+                <span id="label-weight-live" style="font-weight: 700; color: #10b981;">45%</span>
+              </div>
+              <input type="range" id="input-weight-live" min="0" max="100" value="45" step="5" style="width: 100%; accent-color: #10b981;" />
+            </div>
+
+            <div id="weight-sum-warning" style="font-size: 12.5px; font-weight: 600; color: #16a34a;">
+              ✓ 權重合計：100% (正常)
+            </div>
+
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 4px 0;" />
+
+            <div>
+              <label style="font-weight: 600; display: block; margin-bottom: 4px;">標準人行道淨寬門檻 (公尺)：</label>
+              <input type="number" id="input-threshold-width" value="1.5" min="0.8" max="3.0" step="0.1" style="width: 120px; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 4px;" />
+              <span style="font-size: 12px; color: #64748b; margin-left: 8px;">(市區道路人行道淨寬標準建議 ≥ 1.5m)</span>
+            </div>
+
+            <div id="admin-weight-status" style="display: none; padding: 8px 12px; border-radius: 6px; font-size: 13px;"></div>
+
+            <div style="display: flex; gap: 8px; margin-top: 6px;">
+              <button id="btn-save-weights" class="btn btn-primary" style="padding: 7px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                💾 儲存權重設定
+              </button>
+              <button id="btn-reset-weights" class="btn" style="padding: 7px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; color: #475569; cursor: pointer;">
+                恢復預設 (45/10/45)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 分頁 3: 系統快取與狀態 -->
+        <div id="admin-tab-status" class="admin-tab-pane">
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 13px; line-height: 1.6;">
+            💡 <strong>伺服器快取狀態</strong>：空間索引 (STRtree) 常駐於記憶體以實現毫秒級空間分析運算。
+          </div>
+
+          <div id="admin-status-details" style="font-size: 13px; display: flex; flex-direction: column; gap: 6px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px;">
+            <div>載入中...</div>
+          </div>
+
+          <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px;">
+            <button id="btn-reload-cache" class="btn btn-secondary" style="padding: 7px 16px; border-radius: 6px; font-weight: 600; background: #475569; color: #fff; cursor: pointer;">
+              ⚡ 重新加載所有圖資與索引快取
+            </button>
+            <span id="admin-reload-status" style="font-size: 12.5px; color: #16a34a;"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 應用程式邏輯模組 -->
   <script src="src/config.js"></script>
   <script src="src/map.js"></script>
@@ -597,6 +770,7 @@
   <script src="src/walk_analysis.js"></script>
   <script src="src/dashboard.js"></script>
   <script src="src/report_export.js"></script>
+  <script src="src/admin.js"></script>
 
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
@@ -624,6 +798,11 @@
 
       // 7. 初始化報告與出圖匯出器
       const reportExporter = new ReportExporter();
+
+      // 8. 初始化管理員後台控制台模組並公開全域參照
+      window.webgisMap = webgisMap;
+      window.layerManager = layerMgr;
+      window.adminPanel = new AdminPanel();
 
       // --- UI 事件綁定 ---
       // 底圖切換按鈕 (通用電子圖、灰階、正射影像)
