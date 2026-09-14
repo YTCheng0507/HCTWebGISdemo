@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>人行環境 GIS 資料平台</title>
+
+  <!-- MapLibre GL JS -->
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+
+  <!-- Mapbox GL Draw -->
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.css" type="text/css" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js"></script>
+
+  <!-- Turf.js (空間分析運算庫) -->
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+  <!-- Proj4js (TWD97 ↔ WGS84 坐標轉換庫) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+
+  <!-- Apache ECharts -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+
+  <!-- 系統樣式 -->
+  <link rel="stylesheet" href="public/css/style.css" />
+  <style>
+    /* 圖層透明度滑桿樣式 */
+    .opacity-control {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+      padding-left: 20px;
+      font-size: 12px;
+      color: #64748b;
+    }
+    .opacity-slider {
+      flex: 1;
+      height: 5px;
+      accent-color: #2563eb;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 頂部導覽列 -->
+  <header class="navbar">
+    <div class="nav-brand">
+      <h1>人行環境 GIS 資料平台</h1>
+      <span style="font-size: 11px; background: #0284c7; color: white; padding: 2px 8px; border-radius: 12px; margin-left: 4px;">人本交通評估系統</span>
+    </div>
+
+    <div class="nav-controls">
+      <!-- 縣市切換下拉 (支援未來宜蘭、台東無縫切換) -->
+      <label style="font-size: 13px; color: #cbd5e1;">示範縣市：</label>
+      <select id="county-selector" class="county-select">
+        <option value="kaohsiung">高雄市 (示範研究區)</option>
+        <option value="yilan" disabled>宜蘭縣 (下週擴充)</option>
+        <option value="taitung" disabled>台東縣 (下週擴充)</option>
+      </select>
+
+      <!-- 全域關鍵字搜尋 (路名、路口、ID) -->
+      <div style="display: flex; gap: 4px;">
+        <input type="text" id="search-road-input" placeholder="搜尋路名 (如: 大順一路)" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #475569; background: #334155; color: #fff; font-size: 13px; width: 170px;" />
+        <button id="btn-search-road" class="btn btn-primary" style="padding: 5px 10px;">搜尋</button>
+      </div>
+
+      <!-- 坐標快速定位 (支援 WGS84 經緯度 或 TWD97 二度分帶) -->
+      <div style="display: flex; gap: 4px;">
+        <input type="text" id="coord-input" placeholder="經緯度或 TWD97 X,Y" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #475569; background: #334155; color: #fff; font-size: 13px; width: 170px;" />
+        <button id="btn-coord-locate" class="btn btn-secondary" style="padding: 5px 10px;">定位</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主要地圖與工具容器 -->
+  <div class="main-container">
+    <!-- 地圖主畫布 -->
+    <div id="map"></div>
+
+    <!-- 展開側欄浮動按鈕 (收合時顯示) -->
+    <button id="btn-expand-panel" class="floating-panel-toggle" title="展開側欄功能">☰ 功能選單</button>
+
+    <!-- 左側工具與圖層控制抽屜 (支援收合與四功能分頁) -->
+    <aside id="left-panel" class="left-panel">
+      <div class="panel-header">
+        <span style="font-weight: 700; color: #1e293b;">人行環境 GIS 工具箱</span>
+        <button id="btn-collapse-panel" class="btn-icon" title="收合側欄" style="background: #f1f5f9; border: 1px solid #cbd5e1; font-size: 13px; cursor: pointer; color: #475569; padding: 3px 8px; border-radius: 4px; transition: background 0.15s;">◀ 收合</button>
+      </div>
+
+      <!-- 側欄四大功能分類切換分頁導覽列 -->
+      <nav class="panel-tabs">
+        <button class="panel-tab-btn active" data-tab="tab-layers">圖資圖層</button>
+        <button class="panel-tab-btn" data-tab="tab-analysis">生活圈分析</button>
+        <button class="panel-tab-btn" data-tab="tab-tools">GIS 量測</button>
+        <button class="panel-tab-btn" data-tab="tab-method">評分說明</button>
+      </nav>
+
+      <div class="panel-body">
+        <!-- 分頁 1：圖資圖層 (底圖切換 + 圖層管理 + 圖例) -->
+        <div id="tab-layers" class="tab-pane active">
+          <!-- 1. 底圖切換 (NLSC WMTS 國土測繪中心) -->
+          <div>
+            <div class="section-title">底圖服務 (國土測繪中心)</div>
+            <div class="basemap-group">
+              <button class="basemap-btn active" data-basemap="emap">通用電子圖</button>
+              <button class="basemap-btn" data-basemap="emap01">灰階底圖</button>
+              <button class="basemap-btn" data-basemap="photo">正射影像圖</button>
+            </div>
+            <div style="margin-top: 6px;">
+              <select id="other-basemap-select" style="width: 100%; padding: 5px 8px; font-size: 12px; border-radius: 4px; border: 1px solid #cbd5e1; background: #fff; color: #334155; cursor: pointer; outline: none;">
+                <option value="">其他底圖...</option>
+                <optgroup label="通用電子地圖系列">
+                  <option value="emap_nohouse">通用電子地圖 (無門牌)</option>
+                  <option value="emap_withhouse">通用電子地圖 (有門牌+等高線)</option>
+                  <option value="emap_notext">通用電子地圖 (無文字)</option>
+                </optgroup>
+                <optgroup label="正射影像圖系列">
+                  <option value="photo_mix">正射影像圖 (混合標註)</option>
+                </optgroup>
+                <optgroup label="基本地形圖系列">
+                  <option value="topo_b5000">基本地形圖 (1/5000)</option>
+                  <option value="topo_b25000">基本地形圖 (1/25000)</option>
+                </optgroup>
+              </select>
+            </div>
+          </div>
+
+          <!-- 2. 圖資管理與透明度調節 -->
+          <div>
+            <div class="section-title">圖資管理與透明度調節</div>
+            <div class="layer-list">
+              <!-- 12公尺以上道路人本交通環境評估圖層 (預設開啟) -->
+              <div class="layer-item" style="flex-direction: column; align-items: stretch;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <label class="layer-label">
+                    <input type="checkbox" id="chk-road-priority" checked />
+                    <span class="color-dot" style="background: #2563eb;"></span>
+                    <span>12公尺以上道路人本交通環境評估</span>
+                  </label>
+                </div>
+                <div class="opacity-control">
+                  <span>透明度</span>
+                  <input type="range" class="opacity-slider" data-layer="layer-road-priority" min="0" max="1" step="0.05" value="0.85" />
+                  <span class="opacity-val">85%</span>
+                </div>
+              </div>
+
+              <!-- 人行道圖層 (預設開啟) -->
+              <div class="layer-item" style="flex-direction: column; align-items: stretch;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <label class="layer-label">
+                    <input type="checkbox" id="chk-sidewalk" checked />
+                    <span class="color-dot" style="background: #81c784;"></span>
+                    <span>人行道實體普查圖資</span>
+                  </label>
+                </div>
+                <div class="opacity-control">
+                  <span>透明度</span>
+                  <input type="range" class="opacity-slider" data-layer="layer-sidewalk" min="0" max="1" step="0.05" value="0.80" />
+                  <span class="opacity-val">80%</span>
+                </div>
+              </div>
+
+              <!-- 事故點圖層 (預設關閉) -->
+              <div class="layer-item" style="flex-direction: column; align-items: stretch;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <label class="layer-label">
+                    <input type="checkbox" id="chk-accidents" />
+                    <span style="color: #ea580c; font-size: 14px; margin-right: 2px; line-height: 1;">▲</span>
+                    <span>近三年事故點 (A1/A2)</span>
+                  </label>
+                </div>
+                <div class="opacity-control">
+                  <span>透明度</span>
+                  <input type="range" class="opacity-slider" data-layer="layer-accidents" min="0" max="1" step="0.05" value="0.90" />
+                  <span class="opacity-val">90%</span>
+                </div>
+
+                <!-- 事故等級 (A1/A2) 下拉複選選單 -->
+                <div class="accident-dropdown-wrapper" style="margin-top: 6px; padding-left: 20px;">
+                  <button type="button" id="btn-accident-dropdown" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; font-size: 13px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer; color: #334155; transition: background 0.15s;">
+                    <span id="accident-dropdown-summary">等級篩選 (全部 A1+A2)</span>
+                    <span id="accident-dropdown-arrow" style="font-size: 10px; transition: transform 0.2s;">▼</span>
+                  </button>
+
+                  <div id="accident-dropdown-menu" style="display: none; margin-top: 4px; padding: 10px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); font-size: 13px; z-index: 10;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #f1f5f9;">
+                      <span style="font-weight: bold; color: #475569;">選擇事故等級：</span>
+                      <div style="display: flex; gap: 6px;">
+                        <button type="button" id="btn-accident-select-all" style="font-size: 11px; padding: 2px 8px; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 3px; cursor: pointer;">全選</button>
+                        <button type="button" id="btn-accident-deselect-all" style="font-size: 11px; padding: 2px 8px; background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; border-radius: 3px; cursor: pointer;">清空</button>
+                      </div>
+                    </div>
+
+                    <div id="accident-category-checklist" style="display: flex; flex-direction: column; gap: 6px;">
+                      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" class="accident-category-chk" value="A1" checked />
+                        <span style="color: #dc2626; font-size: 13px; margin-right: 2px; line-height: 1;">▲</span>
+                        <span>A1 類 (死亡事故)</span>
+                      </label>
+                      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" class="accident-category-chk" value="A2" checked />
+                        <span style="color: #ea580c; font-size: 13px; margin-right: 2px; line-height: 1;">▲</span>
+                        <span>A2 類 (受傷事故)</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- POI 圖層 (預設關閉) -->
+              <div class="layer-item" style="flex-direction: column; align-items: stretch;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <label class="layer-label">
+                    <input type="checkbox" id="chk-poi" />
+                    <span class="color-dot" style="background: #e84393;"></span>
+                    <span>生活圈 POI (通用圖七大分類)</span>
+                  </label>
+                </div>
+                <div class="opacity-control">
+                  <span>透明度</span>
+                  <input type="range" class="opacity-slider" data-layer="layer-poi" min="0" max="1" step="0.05" value="0.85" />
+                  <span class="opacity-val">85%</span>
+                </div>
+
+                <!-- POI 七大類別下拉複選選單 -->
+                <div class="poi-dropdown-wrapper" style="margin-top: 6px; padding-left: 20px;">
+                  <button type="button" id="btn-poi-dropdown" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; font-size: 13px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer; color: #334155; transition: background 0.15s;">
+                    <span id="poi-dropdown-summary">類別篩選 (全部 7 類)</span>
+                    <span id="poi-dropdown-arrow" style="font-size: 10px; transition: transform 0.2s;">▼</span>
+                  </button>
+
+                  <div id="poi-dropdown-menu" style="display: none; margin-top: 4px; padding: 10px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); font-size: 13px; z-index: 10;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #f1f5f9;">
+                      <span style="font-weight: bold; color: #475569;">選擇顯示類別：</span>
+                      <div style="display: flex; gap: 6px;">
+                        <button type="button" id="btn-poi-select-all" style="font-size: 11px; padding: 2px 8px; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 3px; cursor: pointer;">全選</button>
+                        <button type="button" id="btn-poi-deselect-all" style="font-size: 11px; padding: 2px 8px; background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; border-radius: 3px; cursor: pointer;">清空</button>
+                      </div>
+                    </div>
+
+                    <div id="poi-category-checklist" style="display: flex; flex-direction: column; gap: 6px;">
+                      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" class="poi-category-chk" value="生活機能機構及設施" checked />
+                        <span class="color-dot" style="background: #e84393; width: 10px; height: 10px; min-width: 10px;"></span>
+                        <span>生活機能機構及設施</span>
+                      </label>
+                      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" class="poi-category-chk" value="公共及休閒場所" checked />
+                        <span class="color-dot" style="background: #00b894; width: 10px; height: 10px; min-width: 10px;"></span>
+                        <span>公共及休閒場所</span>
+                      </label>
+                      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" class="poi-category-chk" value="交通運輸設施" checked />
+                        <span class="color-dot" style="background: #f39c12; width: 10px; height: 10px; min-width: 10px;"></span>
+                        <span>交通運輸設施</span>
+                      </label>
+                      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" class="poi-category-chk" value="文教機關及場所" checked />
+                        <span class="color-dot" style="background: #6c5ce7; width: 10px; height: 10px; min-width: 10px;"></span>
+                        <span>文教機關及場所</span>
+                      </label>
+                      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" class="poi-category-chk" value="醫療保健及社福機構" checked />
+                        <span class="color-dot" style="background: #eb4d4b; width: 10px; height: 10px; min-width: 10px;"></span>
+                        <span>醫療保健及社福機構</span>
+                      </label>
+                      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" class="poi-category-chk" value="政府機關及機構" checked />
+                        <span class="color-dot" style="background: #0984e3; width: 10px; height: 10px; min-width: 10px;"></span>
+                        <span>政府機關及機構</span>
+                      </label>
+                      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" class="poi-category-chk" value="其他地標" checked />
+                        <span class="color-dot" style="background: #636e72; width: 10px; height: 10px; min-width: 10px;"></span>
+                        <span>其他地標</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 最小統計區人口 -->
+              <div class="layer-item" style="flex-direction: column; align-items: stretch;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <label class="layer-label">
+                    <input type="checkbox" id="chk-population" />
+                    <span class="color-dot" style="background: #6c5ce7;"></span>
+                    <span>最小統計區人口分佈</span>
+                  </label>
+                </div>
+                <div class="opacity-control">
+                  <span>透明度</span>
+                  <input type="range" class="opacity-slider" data-layer="layer-population" min="0" max="1" step="0.05" value="0.25" />
+                  <span class="opacity-val">25%</span>
+                </div>
+              </div>
+
+              <!-- 行政區界 (38個行政區) -->
+              <div class="layer-item" style="flex-direction: column; align-items: stretch;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <label class="layer-label">
+                    <input type="checkbox" id="chk-town-boundary" />
+                    <span class="color-dot" style="background: #1e293b;"></span>
+                    <span>區界 (38個行政區)</span>
+                  </label>
+                </div>
+                <div class="opacity-control">
+                  <span>透明度</span>
+                  <input type="range" class="opacity-slider" data-layer="layer-town-boundary" min="0" max="1" step="0.05" value="0.85" />
+                  <span class="opacity-val">85%</span>
+                </div>
+              </div>
+
+              <!-- 村里界 (904個村里) -->
+              <div class="layer-item" style="flex-direction: column; align-items: stretch;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <label class="layer-label">
+                    <input type="checkbox" id="chk-village-boundary" />
+                    <span class="color-dot" style="background: #64748b;"></span>
+                    <span>村里界 (904個村里)</span>
+                  </label>
+                </div>
+                <div class="opacity-control">
+                  <span>透明度</span>
+                  <input type="range" class="opacity-slider" data-layer="layer-village-boundary" min="0" max="1" step="0.05" value="0.65" />
+                  <span class="opacity-val">65%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. POI 七大類與人本環境圖例說明 -->
+          <div class="legend-panel">
+            <div style="font-weight: bold; margin-bottom: 4px; color: #1e293b;">POI 臺灣通用地圖七大分類</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px;">
+              <div><span class="color-dot" style="background: #e84393;"></span> 生活機能設施</div>
+              <div><span class="color-dot" style="background: #00b894;"></span> 公共休閒場所</div>
+              <div><span class="color-dot" style="background: #f39c12;"></span> 交通運輸設施</div>
+              <div><span class="color-dot" style="background: #6c5ce7;"></span> 文教機關場所</div>
+              <div><span class="color-dot" style="background: #eb4d4b;"></span> 醫療保健社福</div>
+              <div><span class="color-dot" style="background: #0984e3;"></span> 政府機關機構</div>
+              <div><span class="color-dot" style="background: #636e72;"></span> 其他地標</div>
+            </div>
+            <div style="margin-top: 8px; border-top: 1px dashed #cbd5e1; padding-top: 6px; font-size: 11px;">
+              <div style="font-weight: bold; margin-bottom: 4px; color: #1e293b;">人行道實體鋪面 (Polygon 面資料)</div>
+              <div class="legend-item"><span style="width: 14px; height: 14px; background: #81c784; border: 1px solid #4caf50; border-radius: 2px; display: inline-block;"></span> 淨寬合規 (≥ 1.5m 柔和淺綠)</div>
+              <div class="legend-item"><span style="width: 14px; height: 14px; background: #e57373; border: 1px solid #ef5350; border-radius: 2px; display: inline-block;"></span> 淨寬不足 (< 1.5m 柔和淺紅)</div>
+            </div>
+            <div style="margin-top: 8px; border-top: 1px dashed #cbd5e1; padding-top: 6px; font-size: 11px;">
+              <div style="font-weight: bold; margin-bottom: 4px; color: #1e293b;">交通事故點位 (三角形警示標誌)</div>
+              <div style="display: flex; gap: 14px; margin-top: 3px;">
+                <div style="display: flex; align-items: center; gap: 4px;"><span style="color: #dc2626; font-size: 13px;">▲</span> A1 類 (死亡)</div>
+                <div style="display: flex; align-items: center; gap: 4px;"><span style="color: #ea580c; font-size: 13px;">▲</span> A2 類 (受傷)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 分頁 2：生活圈分析 (區域手繪框選 + 點位步行生活圈分析) -->
+        <div id="tab-analysis" class="tab-pane">
+          <!-- 區塊 A：手繪區域框選分析 -->
+          <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+            <div class="section-title">手繪區域框選分析</div>
+            <div class="tool-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 8px;">
+              <button id="btn-draw-polygon" class="tool-btn" style="background: #0284c7; color: #fff; font-weight: bold; font-size: 13px; padding: 7px 2px;">多邊形</button>
+              <button id="btn-draw-rect" class="tool-btn" style="background: #0369a1; color: #fff; font-weight: bold; font-size: 13px; padding: 7px 2px;">矩形</button>
+              <button id="btn-draw-circle" class="tool-btn" style="background: #075985; color: #fff; font-weight: bold; font-size: 13px; padding: 7px 2px;">圓形圈</button>
+              <button id="btn-draw-stop" class="tool-btn" style="background: #475569; color: #fff; font-weight: 500; font-size: 13px; padding: 7px 2px;" title="結束框選並回到地圖瀏覽">結束框選</button>
+            </div>
+            <div style="font-size: 12px; color: #64748b; line-height: 1.5;">點擊上方工具後於地圖點擊劃定評估範圍（雙擊閉合），系統將即時計算人行道覆蓋、POI豐富度與評估總分。</div>
+          </div>
+
+          <!-- 區塊 B：依照點座標的步行路網生活圈分析 (可收合折疊卡片) -->
+          <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+            <details open style="cursor: pointer;">
+              <summary style="font-weight: 700; font-size: 14px; color: #1e293b; display: flex; align-items: center; justify-content: space-between; outline: none; user-select: none;">
+                <span>步行路網生活圈分析 (等時圈)</span>
+                <span style="font-size: 11px; background: #f3e8ff; color: #7c3aed; padding: 2px 6px; border-radius: 4px; font-weight: 600;">自選速度</span>
+              </summary>
+
+              <div style="margin-top: 12px; cursor: default; display: flex; flex-direction: column; gap: 10px;">
+                <!-- 計算方式選擇 -->
+                <div>
+                  <label style="font-size: 12px; color: #475569; font-weight: 600; display: block; margin-bottom: 4px;">分析模式：</label>
+                  <div style="display: flex; gap: 14px; font-size: 13px;">
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                      <input type="radio" name="walk-calc-mode" value="time" checked />
+                      <span>依步行時間 (分鐘)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                      <input type="radio" name="walk-calc-mode" value="distance" />
+                      <span>依步行距離 (公尺)</span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- 步行時間輸入區 -->
+                <div id="walk-time-section">
+                  <label style="font-size: 12px; color: #475569; font-weight: 600; display: block; margin-bottom: 4px;">預計步行時間：</label>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <input type="number" id="walk-time-input" min="1" max="60" value="10" style="width: 70px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px;" />
+                    <span style="font-size: 13px; color: #64748b;">分鐘</span>
+                    <div style="display: flex; gap: 4px; margin-left: auto;">
+                      <button type="button" class="btn-walk-preset" data-val="5" style="padding: 3px 6px; font-size: 11px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 3px; cursor: pointer;">5分</button>
+                      <button type="button" class="btn-walk-preset" data-val="10" style="padding: 3px 6px; font-size: 11px; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 3px; cursor: pointer;">10分</button>
+                      <button type="button" class="btn-walk-preset" data-val="15" style="padding: 3px 6px; font-size: 11px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 3px; cursor: pointer;">15分</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 步行距離輸入區 (切換時顯示) -->
+                <div id="walk-dist-section" style="display: none;">
+                  <label style="font-size: 12px; color: #475569; font-weight: 600; display: block; margin-bottom: 4px;">預計步行距離：</label>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <input type="number" id="walk-dist-input" min="50" max="5000" step="50" value="600" style="width: 80px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px;" />
+                    <span style="font-size: 13px; color: #64748b;">公尺 (m)</span>
+                    <div style="display: flex; gap: 4px; margin-left: auto;">
+                      <button type="button" class="btn-dist-preset" data-val="400" style="padding: 3px 6px; font-size: 11px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 3px; cursor: pointer;">400m</button>
+                      <button type="button" class="btn-dist-preset" data-val="600" style="padding: 3px 6px; font-size: 11px; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 3px; cursor: pointer;">600m</button>
+                      <button type="button" class="btn-dist-preset" data-val="800" style="padding: 3px 6px; font-size: 11px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 3px; cursor: pointer;">800m</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 行走速度選擇 (附清楚參考數值) -->
+                <div>
+                  <label style="font-size: 12px; color: #475569; font-weight: 600; display: block; margin-bottom: 4px;">行走速度 (參考基準數值)：</label>
+                  <select id="walk-speed-select" style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; background: #fff; color: #334155;">
+                    <option value="4.0" selected>🚶 正常步行速度：約 4.0 km/h (約 67 m/分，一般成人標準)</option>
+                    <option value="5.0">🏃 快速健步速度：約 5.0 km/h (約 83 m/分，通勤快步)</option>
+                    <option value="3.0">🐢 慢速悠閒速度：約 3.0 km/h (約 50 m/分，長者、幼童、輪椅)</option>
+                  </select>
+                </div>
+
+                <!-- 試算涵蓋範圍提示 -->
+                <div id="walk-calc-summary" style="background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 4px; padding: 7px 10px; font-size: 12px; color: #6b21a8; line-height: 1.5;">
+                  💡 試算半徑：約 <strong>667 公尺</strong> 生活圈 (涵蓋面積約 140 公頃)
+                </div>
+
+                <!-- 操作按鈕 -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px;">
+                  <button type="button" id="btn-walk-start" class="tool-btn" style="background: #7c3aed; color: #fff; font-weight: bold; border-color: #7c3aed; grid-column: span 2;">
+                    📍 點擊地圖中心點開始分析
+                  </button>
+                  <button type="button" id="btn-walk-stop" class="tool-btn" style="color: #475569; font-weight: 500;">
+                    結束分析
+                  </button>
+                  <button type="button" id="btn-walk-clear" class="tool-btn" style="color: #dc2626;">
+                    清除生活圈
+                  </button>
+                </div>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <!-- 分頁 3：GIS 量測與定位 -->
+        <div id="tab-tools" class="tab-pane">
+          <div>
+            <div class="section-title">GIS 量測與坐標工具</div>
+            <div class="tool-grid" style="grid-template-columns: repeat(2, 1fr); gap: 6px;">
+              <button id="btn-measure-dist" class="tool-btn">📏 距離量測</button>
+              <button id="btn-measure-area" class="tool-btn">📐 面積量測</button>
+              <button id="btn-pick-coord" class="tool-btn">📍 查雙坐標</button>
+              <button id="btn-measure-stop" class="tool-btn" style="color: #475569; font-weight: 500;">結束量測</button>
+              <button id="btn-export-map" class="tool-btn" style="color: #2563eb; grid-column: span 2;">📸 截取目前地圖畫面 (PNG)</button>
+              <button id="btn-clear-tools" class="tool-btn" style="color: #dc2626; grid-column: span 2;">🗑️ 清除所有標記</button>
+            </div>
+            <div style="font-size: 12px; color: #64748b; margin-top: 8px; line-height: 1.5;">
+              • <strong>距離量測</strong>：在地圖連續點擊錨點拉線，雙擊即可固化總長度。<br/>
+              • <strong>面積量測</strong>：連續點擊頂點，即時連回起點預覽多邊形，雙擊閉合計算面積。
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid #e2e8f0; padding-top: 12px;">
+            <div class="section-title">全域路名與坐標搜尋</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; gap: 4px;">
+                <input type="text" id="tab-search-road-input" placeholder="搜尋路名 (如: 大順一路)" style="flex: 1; padding: 6px 10px; border-radius: 4px; border: 1px solid #cbd5e1; font-size: 13px;" />
+                <button id="btn-tab-search-road" class="btn btn-primary" style="padding: 6px 12px;">搜尋</button>
+              </div>
+              <div style="display: flex; gap: 4px;">
+                <input type="text" id="tab-coord-input" placeholder="輸入 WGS84 經緯度 或 TWD97 X,Y" style="flex: 1; padding: 6px 10px; border-radius: 4px; border: 1px solid #cbd5e1; font-size: 13px;" />
+                <button id="btn-tab-coord-locate" class="btn btn-secondary" style="padding: 6px 12px;">定位</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 分頁 4：評估方法與說明 (民眾看得懂的生動說明) -->
+        <div id="tab-method" class="tab-pane">
+          <div style="font-size: 13px; color: #475569; line-height: 1.6;">
+            本平台依據客觀科學指標，評估特定街區的<strong>步行友善程度</strong>。總分滿分 100 分，由四大維度加權合成：
+          </div>
+
+          <div class="method-card">
+            <div class="method-card-title">
+              <span>🚶 1. 人行道淨寬合規性</span>
+              <span style="color: #2563eb; font-size: 12px;">權重 40% (40分)</span>
+            </div>
+            <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
+              <strong>走得舒適、推車無阻：</strong>國家標準規定人行道淨寬應 <strong>≥ 1.5 公尺</strong>，才足供輪椅與嬰兒車雙向順暢通行。淨寬合格比例越高，得分越高。
+            </div>
+            <div class="method-formula">
+              公式：(淨寬 ≥ 1.5m 之人行道長度 ÷ 人行道總長度) × 40 分
+            </div>
+          </div>
+
+          <div class="method-card">
+            <div class="method-card-title">
+              <span>🛣️ 2. 人行道覆蓋普及率</span>
+              <span style="color: #2563eb; font-size: 12px;">權重 25% (25分)</span>
+            </div>
+            <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
+              <strong>出門有路走、不與車爭道：</strong>評估主要道路兩側是否普遍設有人行道。兩側都有人行道的道路越多，行人越能安全穿梭各路口。
+            </div>
+            <div class="method-formula">
+              公式：(人行道總長度 ÷ 道路中心線長度) × 12.5 分 (最高25分)
+            </div>
+          </div>
+
+          <div class="method-card">
+            <div class="method-card-title">
+              <span>🏪 3. 生活機能豐富度 (POI)</span>
+              <span style="color: #2563eb; font-size: 12px;">權重 20% (20分)</span>
+            </div>
+            <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
+              <strong>機能近在咫尺：</strong>散步 5~10 分鐘內是否有超商、診所藥局、學校、公園、公車站、捷運站與派出所。設施種類越多越便利，得分越高。
+            </div>
+            <div class="method-formula">
+              依通用電子地圖七大生活設施類型多樣性與密集度評分 (最高20分)
+            </div>
+          </div>
+
+          <div class="method-card">
+            <div class="method-card-title">
+              <span>🛡️ 4. 行人交通安全風險</span>
+              <span style="color: #2563eb; font-size: 12px;">權重 15% (15分)</span>
+            </div>
+            <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
+              <strong>安全是回家唯一的路：</strong>統計近三年重大交通事故（A1 死亡 / A2 受傷）。若未曾發生事故則維持滿分 15 分，事故越多則適度扣減。
+            </div>
+            <div class="method-formula">
+              公式：基礎分 15 分 - (A1死亡×3分 + A2受傷×0.5分)，扣完為止
+            </div>
+          </div>
+
+          <div class="method-card" style="background: #f8fafc;">
+            <div style="font-weight: 700; font-size: 13px; color: #1e293b; margin-bottom: 6px;">綜合評鑑等級標準</div>
+            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+              <div>🟢 <strong>80 分以上 (優良)</strong>：人本交通典範，步道寬敞且安全。</div>
+              <div>🟡 <strong>60 ~ 79 分 (普通)</strong>：生活機能良好，部分路段淨寬需拓寬。</div>
+              <div>🔴 <strong>未達 60 分 (待加強)</strong>：缺乏連續步道，建議優先爭取工程改善。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右側資訊與區域分析 Dashboard 面板 (可收合抽屜) -->
+    <section id="right-drawer" class="right-drawer" style="transform: translateX(110%);">
+      <div class="drawer-header">
+        <span id="drawer-title" class="drawer-title">區域分析與決策儀表板</span>
+        <button id="drawer-close-btn" class="drawer-close">✕</button>
+      </div>
+      <!-- 分析結果專屬固定子分頁導覽列 (平時查物件屬性時隱藏，分析完畢後常駐顯示) -->
+      <nav id="drawer-analysis-tabs" class="drawer-tabs" style="display: none;">
+        <button type="button" class="drawer-tab-btn active" data-tab="overview">📌 綜合總覽</button>
+        <button type="button" class="drawer-tab-btn" data-tab="accidents">🛡️ 交通事故</button>
+        <button type="button" class="drawer-tab-btn" data-tab="poi">🏪 生活機能</button>
+        <button type="button" class="drawer-tab-btn" data-tab="sidewalk">🚶 人行環境</button>
+      </nav>
+      <div id="drawer-content" class="drawer-body">
+        <div class="empty-hint">
+          <p>請點擊左側「<strong>手繪框選</strong>」或「<strong>步行生活圈</strong>」分析工具，選擇欲評估的特定範圍。</p>
+          <p style="font-size: 12px; margin-top: 8px;">系統將依<strong>長度權重加權</strong>與<strong>面積比例分攤法</strong>，即時計算人本步行環境評估總分與各項人本交通指標！</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 底部資訊列 (雙坐標即時顯示: WGS84 經緯度 + TWD97 二度分帶公尺，靠右下角比例尺左側) -->
+    <footer id="coord-bar" style="position: absolute; bottom: 8px; right: 120px; background: rgba(15, 23, 42, 0.88); color: #fff; padding: 5px 12px; border-radius: 4px; font-size: 12px; z-index: 5; pointer-events: none; backdrop-filter: blur(4px); display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+      <span id="mouse-coord">經緯度: --, 二度分帶: --</span>
+    </footer>
+  </div>
+
+  <!-- 應用程式邏輯模組 -->
+  <script src="src/config.js"></script>
+  <script src="src/map.js"></script>
+  <script src="src/layers.js"></script>
+  <script src="src/measure.js"></script>
+  <script src="src/draw_analysis.js"></script>
+  <script src="src/walk_analysis.js"></script>
+  <script src="src/dashboard.js"></script>
+  <script src="src/report_export.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      console.log('[System] 人行環境 WebGIS 資料平台啟動中...');
+
+      // 1. 初始化地圖
+      const webgisMap = new WebGISMap('map');
+      await webgisMap.init();
+
+      // 2. 初始化圖層管理器
+      const layerMgr = new LayerManager(webgisMap);
+      await layerMgr.loadCountyLayers('kaohsiung');
+
+      // 3. 初始化量測與雙坐標工具
+      const measureTool = new MeasureTool(webgisMap);
+
+      // 4. 初始化三種框選分析工具 (多邊形、矩形、圓形)
+      const drawTool = new DrawAnalysisTool(webgisMap);
+
+      // 5. 初始化點座標生活圈等時圈分析工具
+      const walkTool = new WalkAnalysisTool(webgisMap);
+
+      // 6. 初始化 Dashboard 模組
+      const dashboard = new DashboardManager();
+
+      // 7. 初始化報告與出圖匯出器
+      const reportExporter = new ReportExporter();
+
+      // --- UI 事件綁定 ---
+      // 底圖切換按鈕 (通用電子圖、灰階、正射影像)
+      document.querySelectorAll('.basemap-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          document.querySelectorAll('.basemap-btn').forEach(b => b.classList.remove('active'));
+          e.target.classList.add('active');
+          const bmKey = e.target.getAttribute('data-basemap');
+          webgisMap.setBasemap(bmKey);
+
+          // 復原「其他底圖」下拉選單選取狀態
+          const otherSel = document.getElementById('other-basemap-select');
+          if (otherSel) otherSel.value = "";
+        });
+      });
+
+      // 其他底圖下拉選單 (無門牌、有門牌、無文字、混合正射、基本地形圖等)
+      const otherBasemapSel = document.getElementById('other-basemap-select');
+      if (otherBasemapSel) {
+        otherBasemapSel.addEventListener('change', (e) => {
+          const bmKey = e.target.value;
+          if (bmKey) {
+            // 取消主要按鈕 active 樣式
+            document.querySelectorAll('.basemap-btn').forEach(b => b.classList.remove('active'));
+            webgisMap.setBasemap(bmKey);
+          }
+        });
+      }
+
+      // 圖層開關 Checkbox
+      const layerMap = {
+        'chk-road-priority': 'layer-road-priority',
+        'chk-sidewalk': 'layer-sidewalk',
+        'chk-accidents': 'layer-accidents',
+        'chk-poi': 'layer-poi',
+        'chk-population': 'layer-population',
+        'chk-town-boundary': 'layer-town-boundary',
+        'chk-village-boundary': 'layer-village-boundary'
+      };
+      Object.entries(layerMap).forEach(([chkId, layerId]) => {
+        const chk = document.getElementById(chkId);
+        if (chk) {
+          chk.addEventListener('change', (e) => {
+            layerMgr.toggleLayer(layerId, e.target.checked);
+          });
+        }
+      });
+
+      // 圖層透明度滑桿 (Opacity Slider)
+      document.querySelectorAll('.opacity-slider').forEach(slider => {
+        slider.addEventListener('input', (e) => {
+          const layerId = e.target.getAttribute('data-layer');
+          const val = parseFloat(e.target.value);
+          layerMgr.setLayerOpacity(layerId, val);
+          const valSpan = e.target.parentElement.querySelector('.opacity-val');
+          if (valSpan) valSpan.innerText = `${Math.round(val * 100)}%`;
+        });
+      });
+
+      // 事故等級 (A1/A2) 下拉選單展開/收合
+      const btnAccidentDropdown = document.getElementById('btn-accident-dropdown');
+      const accidentDropdownMenu = document.getElementById('accident-dropdown-menu');
+      const accidentDropdownArrow = document.getElementById('accident-dropdown-arrow');
+      const accidentSummary = document.getElementById('accident-dropdown-summary');
+
+      if (btnAccidentDropdown && accidentDropdownMenu) {
+        btnAccidentDropdown.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isHidden = accidentDropdownMenu.style.display === 'none';
+          accidentDropdownMenu.style.display = isHidden ? 'block' : 'none';
+          accidentDropdownArrow.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+        });
+
+        document.addEventListener('click', (e) => {
+          if (!btnAccidentDropdown.contains(e.target) && !accidentDropdownMenu.contains(e.target)) {
+            accidentDropdownMenu.style.display = 'none';
+            accidentDropdownArrow.style.transform = 'rotate(0deg)';
+          }
+        });
+      }
+
+      // 動態過濾事故等級 (A1/A2)
+      const updateAccidentFilter = () => {
+        const checkedBoxes = Array.from(document.querySelectorAll('.accident-category-chk:checked'));
+        const activeTypes = checkedBoxes.map(cb => cb.value);
+        const totalCount = document.querySelectorAll('.accident-category-chk').length;
+
+        if (accidentSummary) {
+          if (activeTypes.length === totalCount) {
+            accidentSummary.innerText = `等級篩選 (全部 A1+A2)`;
+          } else if (activeTypes.length === 0) {
+            accidentSummary.innerText = `等級篩選 (未選擇任何等級)`;
+          } else {
+            accidentSummary.innerText = `等級篩選 (已選 ${activeTypes.join(' + ')})`;
+          }
+        }
+
+        layerMgr.filterAccidentTypes(activeTypes);
+      };
+
+      document.querySelectorAll('.accident-category-chk').forEach(chk => {
+        chk.addEventListener('change', updateAccidentFilter);
+      });
+
+      document.getElementById('btn-accident-select-all').addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.querySelectorAll('.accident-category-chk').forEach(chk => { chk.checked = true; });
+        updateAccidentFilter();
+      });
+
+      document.getElementById('btn-accident-deselect-all').addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.querySelectorAll('.accident-category-chk').forEach(chk => { chk.checked = false; });
+        updateAccidentFilter();
+      });
+
+      // POI 七大分類下拉選單展開/收合
+      const btnPoiDropdown = document.getElementById('btn-poi-dropdown');
+      const poiDropdownMenu = document.getElementById('poi-dropdown-menu');
+      const poiDropdownArrow = document.getElementById('poi-dropdown-arrow');
+      const poiSummary = document.getElementById('poi-dropdown-summary');
+
+      if (btnPoiDropdown && poiDropdownMenu) {
+        btnPoiDropdown.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isHidden = poiDropdownMenu.style.display === 'none';
+          poiDropdownMenu.style.display = isHidden ? 'block' : 'none';
+          poiDropdownArrow.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+        });
+
+        // 點擊選單外部自動收合
+        document.addEventListener('click', (e) => {
+          if (!btnPoiDropdown.contains(e.target) && !poiDropdownMenu.contains(e.target)) {
+            poiDropdownMenu.style.display = 'none';
+            poiDropdownArrow.style.transform = 'rotate(0deg)';
+          }
+        });
+      }
+
+      // 動態過濾 POI 類別
+      const updatePoiFilter = () => {
+        const checkedBoxes = Array.from(document.querySelectorAll('.poi-category-chk:checked'));
+        const activeCategories = checkedBoxes.map(cb => cb.value);
+        const totalCount = document.querySelectorAll('.poi-category-chk').length;
+
+        // 更新按鈕上的摘要文字
+        if (poiSummary) {
+          if (activeCategories.length === totalCount) {
+            poiSummary.innerText = `類別篩選 (全部 ${totalCount} 類)`;
+          } else if (activeCategories.length === 0) {
+            poiSummary.innerText = `類別篩選 (未選擇任何類別)`;
+          } else {
+            poiSummary.innerText = `類別篩選 (已選 ${activeCategories.length}/${totalCount} 類)`;
+          }
+        }
+
+        // 調用圖層管理器動態套用 MapLibre 過濾條件
+        layerMgr.filterPoiCategories(activeCategories);
+      };
+
+      // 監聽各個別類別 Checkbox 變更
+      document.querySelectorAll('.poi-category-chk').forEach(chk => {
+        chk.addEventListener('change', updatePoiFilter);
+      });
+
+      // 全選按鈕
+      document.getElementById('btn-poi-select-all').addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.querySelectorAll('.poi-category-chk').forEach(chk => { chk.checked = true; });
+        updatePoiFilter();
+      });
+
+      // 全不選 / 清空按鈕
+      document.getElementById('btn-poi-deselect-all').addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.querySelectorAll('.poi-category-chk').forEach(chk => { chk.checked = false; });
+        updatePoiFilter();
+      });
+
+      // 框選分析按鈕樣式切換輔助
+      const setDrawBtnActive = (activeId) => {
+        ['btn-draw-polygon', 'btn-draw-rect', 'btn-draw-circle'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) {
+            if (id === activeId) {
+              el.style.outline = '2px solid #38bdf8';
+              el.style.boxShadow = '0 0 8px rgba(56, 189, 248, 0.6)';
+            } else {
+              el.style.outline = 'none';
+              el.style.boxShadow = 'none';
+            }
+          }
+        });
+      };
+
+      // 監聽空間分析完成，清除框選按鈕高亮並自動點亮範圍內事故與 POI 點位
+      window.addEventListener('analysis-complete', (e) => {
+        setDrawBtnActive(null);
+        const result = e.detail;
+        if (result && result.accidents && result.poi) {
+          layerMgr.showAnalysisHighlights(result.accidents.geojson, result.poi.geojson);
+        }
+      });
+
+      // --- 側欄收合與展開控制 ---
+      const leftPanel = document.getElementById('left-panel') || document.querySelector('.left-panel');
+      const btnCollapse = document.getElementById('btn-collapse-panel');
+      const btnExpand = document.getElementById('btn-expand-panel');
+
+      if (btnCollapse && leftPanel) {
+        btnCollapse.addEventListener('click', () => {
+          leftPanel.classList.add('collapsed');
+          if (btnExpand) btnExpand.style.display = 'flex';
+          setTimeout(() => webgisMap.map.resize(), 300);
+        });
+      }
+
+      if (btnExpand && leftPanel) {
+        btnExpand.addEventListener('click', () => {
+          leftPanel.classList.remove('collapsed');
+          btnExpand.style.display = 'none';
+          setTimeout(() => webgisMap.map.resize(), 300);
+        });
+      }
+
+      // --- 側欄四大功能分頁切換 ---
+      document.querySelectorAll('.panel-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tabId = btn.getAttribute('data-tab');
+          document.querySelectorAll('.panel-tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+
+          btn.classList.add('active');
+          const targetPane = document.getElementById(tabId);
+          if (targetPane) targetPane.classList.add('active');
+        });
+      });
+
+      // --- 步行生活圈等時/等距圈參數與按鈕控制 ---
+      const walkTimeSec = document.getElementById('walk-time-section');
+      const walkDistSec = document.getElementById('walk-dist-section');
+      const walkTimeInput = document.getElementById('walk-time-input');
+      const walkDistInput = document.getElementById('walk-dist-input');
+      const walkSpeedSelect = document.getElementById('walk-speed-select');
+      const walkSummary = document.getElementById('walk-calc-summary');
+
+      const updateWalkSummary = () => {
+        const mode = document.querySelector('input[name="walk-calc-mode"]:checked')?.value || 'time';
+        const speed = parseFloat(walkSpeedSelect?.value || '4.0');
+        let radiusM = 500;
+
+        if (mode === 'time') {
+          if (walkTimeSec) walkTimeSec.style.display = 'block';
+          if (walkDistSec) walkDistSec.style.display = 'none';
+          const mins = parseFloat(walkTimeInput?.value || '10');
+          radiusM = Math.round((speed * 1000 / 60) * mins);
+        } else {
+          if (walkTimeSec) walkTimeSec.style.display = 'none';
+          if (walkDistSec) walkDistSec.style.display = 'block';
+          radiusM = Math.round(parseFloat(walkDistInput?.value || '600'));
+        }
+
+        const ha = ((Math.PI * radiusM * radiusM) / 10000).toFixed(1);
+        if (walkSummary) {
+          walkSummary.innerHTML = `💡 試算半徑：約 <strong>${radiusM} 公尺</strong> 生活圈 (涵蓋面積約 ${ha} 公頃)`;
+        }
+      };
+
+      document.querySelectorAll('input[name="walk-calc-mode"]').forEach(radio => {
+        radio.addEventListener('change', updateWalkSummary);
+      });
+      if (walkTimeInput) walkTimeInput.addEventListener('input', updateWalkSummary);
+      if (walkDistInput) walkDistInput.addEventListener('input', updateWalkSummary);
+      if (walkSpeedSelect) walkSpeedSelect.addEventListener('change', updateWalkSummary);
+
+      // 預設時間快捷按鈕
+      document.querySelectorAll('.btn-walk-preset').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.btn-walk-preset').forEach(b => {
+            b.style.background = '#f1f5f9';
+            b.style.color = '#334155';
+            b.style.borderColor = '#cbd5e1';
+          });
+          btn.style.background = '#eff6ff';
+          btn.style.color = '#2563eb';
+          btn.style.borderColor = '#bfdbfe';
+          if (walkTimeInput) {
+            walkTimeInput.value = btn.getAttribute('data-val');
+            updateWalkSummary();
+          }
+        });
+      });
+
+      // 預設距離快捷按鈕
+      document.querySelectorAll('.btn-dist-preset').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.btn-dist-preset').forEach(b => {
+            b.style.background = '#f1f5f9';
+            b.style.color = '#334155';
+            b.style.borderColor = '#cbd5e1';
+          });
+          btn.style.background = '#eff6ff';
+          btn.style.color = '#2563eb';
+          btn.style.borderColor = '#bfdbfe';
+          if (walkDistInput) {
+            walkDistInput.value = btn.getAttribute('data-val');
+            updateWalkSummary();
+          }
+        });
+      });
+
+      // 步行分析啟動與停止
+      const btnWalkStart = document.getElementById('btn-walk-start');
+      const btnWalkStop = document.getElementById('btn-walk-stop');
+      const btnWalkClear = document.getElementById('btn-walk-clear');
+
+      if (btnWalkStart) {
+        btnWalkStart.addEventListener('click', () => {
+          measureTool.stopMeasure();
+          drawTool.stopDrawing();
+          setDrawBtnActive(null);
+          walkTool.startSelection();
+        });
+      }
+
+      if (btnWalkStop) {
+        btnWalkStop.addEventListener('click', () => {
+          walkTool.stopSelection();
+        });
+      }
+
+      if (btnWalkClear) {
+        btnWalkClear.addEventListener('click', () => {
+          walkTool.clear();
+          layerMgr.clearAnalysisHighlights();
+          dashboard.closeDrawer();
+        });
+      }
+
+      // 三大框選分析工具按鈕
+      document.getElementById('btn-draw-polygon').addEventListener('click', () => {
+        measureTool.stopMeasure();
+        walkTool.stopSelection();
+        layerMgr.clearAnalysisHighlights();
+        setDrawBtnActive('btn-draw-polygon');
+        drawTool.startPolygonDraw();
+      });
+
+      document.getElementById('btn-draw-rect').addEventListener('click', () => {
+        measureTool.stopMeasure();
+        walkTool.stopSelection();
+        layerMgr.clearAnalysisHighlights();
+        setDrawBtnActive('btn-draw-rect');
+        drawTool.startRectangleDraw();
+      });
+
+      document.getElementById('btn-draw-circle').addEventListener('click', () => {
+        measureTool.stopMeasure();
+        walkTool.stopSelection();
+        layerMgr.clearAnalysisHighlights();
+        setDrawBtnActive('btn-draw-circle');
+        drawTool.startCircleDraw();
+      });
+
+      document.getElementById('btn-draw-stop').addEventListener('click', () => {
+        setDrawBtnActive(null);
+        drawTool.stopDrawing();
+      });
+
+      // GIS 量測工具按鈕
+      document.getElementById('btn-measure-dist').addEventListener('click', () => {
+        setDrawBtnActive(null);
+        drawTool.clear();
+        walkTool.stopSelection();
+        layerMgr.clearAnalysisHighlights();
+        measureTool.startMeasure('distance');
+      });
+
+      document.getElementById('btn-measure-area').addEventListener('click', () => {
+        setDrawBtnActive(null);
+        drawTool.clear();
+        walkTool.stopSelection();
+        layerMgr.clearAnalysisHighlights();
+        measureTool.startMeasure('area');
+      });
+
+      document.getElementById('btn-pick-coord').addEventListener('click', () => {
+        setDrawBtnActive(null);
+        walkTool.stopSelection();
+        measureTool.startMeasure('pick-coord');
+      });
+
+      document.getElementById('btn-measure-stop').addEventListener('click', () => {
+        measureTool.stopMeasure();
+      });
+
+      document.getElementById('btn-clear-tools').addEventListener('click', () => {
+        setDrawBtnActive(null);
+        measureTool.clear();
+        drawTool.clear();
+        walkTool.clear();
+        layerMgr.clearAnalysisHighlights();
+        dashboard.closeDrawer();
+      });
+
+      // 全域路名搜尋 (Tab 3 專用，支援 Enter 鍵)
+      const searchRoadInput = document.getElementById('tab-search-road-input') || document.getElementById('search-road-input');
+      const btnSearchRoad = document.getElementById('btn-tab-search-road') || document.getElementById('btn-search-road');
+      const executeSearchRoad = () => {
+        const query = searchRoadInput?.value.trim();
+        if (!query) return;
+        const found = layerMgr.searchAndFlyToRoad(query);
+        if (!found) {
+          alert(`未在圖層中找到路名包含「${query}」的路段，請確認名稱是否正確。`);
+        }
+      };
+
+      if (btnSearchRoad) btnSearchRoad.addEventListener('click', executeSearchRoad);
+      if (searchRoadInput) {
+        searchRoadInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') executeSearchRoad();
+        });
+      }
+
+      // 雙向坐標定位 (WGS84 經緯度 或 TWD97 二度分帶，支援 Enter 鍵)
+      const coordLocateInput = document.getElementById('tab-coord-input') || document.getElementById('coord-input');
+      const btnCoordLocate = document.getElementById('btn-tab-coord-locate') || document.getElementById('btn-coord-locate');
+      const executeCoordLocate = () => {
+        const val = coordLocateInput?.value.trim();
+        if (!val) return;
+        const success = measureTool.zoomToInput(val);
+        if (!success) {
+          alert('坐標格式錯誤！支援：\n• WGS84: 120.312, 22.627\n• TWD97: 247120, 2501234');
+        }
+      };
+
+      if (btnCoordLocate) btnCoordLocate.addEventListener('click', executeCoordLocate);
+      if (coordLocateInput) {
+        coordLocateInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') executeCoordLocate();
+        });
+      }
+
+      // --- 成果圖與地圖截圖匯出監聽 ---
+      const btnExportMap = document.getElementById('btn-export-map');
+      if (btnExportMap) {
+        btnExportMap.addEventListener('click', () => {
+          reportExporter.exportMapSnapshot(webgisMap.map);
+        });
+      }
+
+      window.addEventListener('export-report-requested', (e) => {
+        reportExporter.exportReportImage(webgisMap.map, e.detail);
+      });
+
+      console.log('[System] 人行環境 WebGIS 資料平台所有模組就緒！');
+    });
+  </script>
+</body>
+</html>
