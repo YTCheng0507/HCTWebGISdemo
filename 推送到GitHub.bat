@@ -1,18 +1,19 @@
 @echo off
 chcp 65001 >nul
-title 推送 WebGIS 專案至 GitHub
+title 同步 WebGIS 專案至 GitHub
 echo ========================================================================
-echo   【高雄市人本交通環境 WebGIS 平台 - GitHub 一鍵推送工具】
+echo   【高雄市人本交通環境 WebGIS 平台 - GitHub 一鍵同步更新工具】
+echo   目標儲存庫: https://github.com/YTCheng0507/HCTWebGISdemo.git
 echo ========================================================================
 echo.
-echo 請先至 https://github.com/new 建立一個空白 Repository (例如: kh-sidewalk-webgis)
+echo [*] 正在檢查並自動提交本地異動...
+"C:\Program Files\Git\cmd\git.exe" add .
+"C:\Program Files\Git\cmd\git.exe" commit -m "update: sync changes from local" 2>nul
+echo [*] 正在推送至 GitHub main 分支...
+"C:\Program Files\Git\cmd\git.exe" push origin main
 echo.
-set /p REPO_URL=請貼上您的 GitHub 儲存庫網址 (例如 https://github.com/你的帳號/kh-sidewalk-webgis.git): 
-echo.
-"C:\Program Files\Git\cmd\git.exe" remote remove origin 2>nul
-"C:\Program Files\Git\cmd\git.exe" remote add origin %REPO_URL%
-echo [*] 正在推送到 GitHub main 分支...
-"C:\Program Files\Git\cmd\git.exe" push -u origin main
-echo.
-echo [OK] 推送完成！請至 Render.com 進行一鍵部署。
+echo ========================================================================
+echo [OK] 專案已成功同步至 GitHub！
+echo 若已在 Render.com 設定連動，Render 會在幾秒內自動偵測並開始重新部署。
+echo ========================================================================
 pause
