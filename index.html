@@ -541,11 +541,42 @@
               <span>🚶 1. 步行環境品質指數 (S_WALK)</span>
               <span style="color: #2563eb; font-size: 12px; font-weight: 700;">權重 45% (可動態微調)</span>
             </div>
-            <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
-              <strong>路網長度加權實測：</strong>將分析圈內各路段與人行道實體普查相交，以各路段在圈內之<strong>長度佔比加權平均</strong>。全面考量步道覆蓋、無障礙淨寬（≥1.5m 門檻）與路面破損占用扣分。
+            <div style="font-size: 12px; color: #475569; line-height: 1.6;">
+              <strong>國土署正面評估版 2.0 (V2) 核心架構：</strong>將分析圈內各路段與人行道實體普查相交，以各路段在圈內之<strong>長度佔比加權平均</strong>。各路段人行道指標 (I_sidewalk) 依正面評估版 V2 規範，<strong>兼顧正向加分與負向扣分</strong>綜合評定：
             </div>
+
+            <!-- 正向加分與負向扣分雙欄對比表 -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; font-size: 11.5px;">
+              <!-- 加分項 -->
+              <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 8px 10px;">
+                <div style="font-weight: 700; color: #166534; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+                  <span>➕ 正向加分項目 (友善步行品質)</span>
+                </div>
+                <ul style="margin: 0; padding-left: 16px; color: #15803d; line-height: 1.55;">
+                  <li><strong>充足通行淨寬</strong>：有效淨寬 ≥ 1.5m 基礎合規，≥ 2.0m 寬裕加分</li>
+                  <li><strong>無障礙通行友善</strong>：設有無障礙斜坡道 (SW_RAMP) 與順平銜接</li>
+                  <li><strong>連續綠化與遮蔭</strong>：配置連續綠帶植栽與行道樹 (SW_TREE)，兼具降溫與人車安全緩衝</li>
+                  <li><strong>公共設施帶收整</strong>：具備獨立設施帶 (SWD_WTH)，將箱桿燈號集中收納以維持純淨人行空間</li>
+                  <li><strong>騎樓平整與貫通</strong>：騎樓無高低落差整平 (AC_EVEN)，提供遮陽擋雨庇護</li>
+                </ul>
+              </div>
+
+              <!-- 扣分項 -->
+              <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 8px 10px;">
+                <div style="font-weight: 700; color: #991b1b; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+                  <span>➖ 負向扣分項目 (通行阻礙與劣化)</span>
+                </div>
+                <ul style="margin: 0; padding-left: 16px; color: #b91c1c; line-height: 1.55;">
+                  <li><strong>有效淨寬不足</strong>：淨寬 &lt; 1.5m（尤其 &lt; 0.9m 輪椅無法通過者加重扣分）</li>
+                  <li><strong>鋪面老化破損</strong>：鋪面破損率高 (SW_BRKRAT)、地磚嚴重鬆動或龜裂 (SW_BK_B/L)</li>
+                  <li><strong>固定路障占用</strong>：變電箱、電線桿、告示牌或私設斜坡侵入通行淨寬</li>
+                  <li><strong>路網中斷斷點</strong>：人行道未連續銜接、局部缺口中斷導致人車交織爭道</li>
+                </ul>
+              </div>
+            </div>
+
             <div class="method-formula">
-              公式：∑ (路段裁切長度 ÷ 總路長) × (100 - 人行道缺失指數 I_sidewalk)
+              公式：S_WALK = ∑ [ (路段裁切長度 ÷ 總路長) × 路段正面評估分 (100 - I_sidewalk) ]
             </div>
           </div>
 
