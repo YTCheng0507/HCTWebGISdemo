@@ -17,81 +17,110 @@ class LayerManager {
     const countyConf = window.APP_CONFIG.counties[countyKey];
     if (!countyConf || !countyConf.layers) return;
 
-    const layersConf = countyConf.layers;
-    const dataPath = countyConf.dataPath;
-
-    // 1. 最小統計區面圖層
-    if (layersConf.population) {
-      await this.addPolygonLayer(
-        layersConf.population.id,
-        `${dataPath}/${layersConf.population.file}`,
-        layersConf.population.visible,
-        layersConf.population.defaultOpacity
-      );
-    }
-
-    // 2. 12米以上道路改善成果線圖層
-    if (layersConf.roadPriority) {
-      await this.addRoadPriorityLayer(
-        layersConf.roadPriority.id,
-        `${dataPath}/${layersConf.roadPriority.file}`,
-        layersConf.roadPriority.visible,
-        layersConf.roadPriority.defaultOpacity
-      );
-    }
-
-    // 3. 人行道實體普查圖層
-    if (layersConf.sidewalk) {
-      await this.addSidewalkLayer(
-        layersConf.sidewalk.id,
-        `${dataPath}/${layersConf.sidewalk.file}`,
-        layersConf.sidewalk.visible,
-        layersConf.sidewalk.defaultOpacity
-      );
-    }
-
-    // 4. 近三年交通事故點圖層
-    if (layersConf.accidents) {
-      await this.addAccidentsLayer(
-        layersConf.accidents.id,
-        `${dataPath}/${layersConf.accidents.file}`,
-        layersConf.accidents.visible,
-        layersConf.accidents.defaultOpacity
-      );
-    }
-
-    // 5. POI 設施點圖層 (通用電子地圖七大分類)
-    if (layersConf.poi) {
-      await this.addPoiLayer(
-        layersConf.poi.id,
-        `${dataPath}/${layersConf.poi.file}`,
-        layersConf.poi.visible,
-        layersConf.poi.defaultOpacity
-      );
-    }
-
-    // 6. 高雄市區界線圖層 (38 區)
-    if (layersConf.townBoundary) {
-      await this.addTownBoundaryLayer(
-        layersConf.townBoundary.id,
-        `${dataPath}/${layersConf.townBoundary.file}`,
-        layersConf.townBoundary.visible,
-        layersConf.townBoundary.defaultOpacity
-      );
-    }
-
-    // 7. 高雄市村里界線圖層 (904 里)
-    if (layersConf.villageBoundary) {
-      await this.addVillageBoundaryLayer(
-        layersConf.villageBoundary.id,
-        `${dataPath}/${layersConf.villageBoundary.file}`,
-        layersConf.villageBoundary.visible,
-        layersConf.villageBoundary.defaultOpacity
-      );
-    }
-
+    // 先初始化分析高亮圖層與滑鼠互動
+    this.initAnalysisHighlightLayers();
     this.bindClickEvents();
-    console.log(`[LayerManager] ${countyConf.name} 所有圖層已載入完成！`);
+
+    const layersConf = countyConf.layers;
+
+    // 1. 第一優先：載入 12 公尺以上道路改善成果線圖層 (僅 3.9 MB / gzip 1.1 MB，即時繪製全圖並建立路名搜尋索引)
+    if (layersConf.roadPriority) {
+      await this.loadSpecificLayer('roadPriority', layersConf.roadPriority.visible);
+    }
+
+    // 2. 第二優先：非同步背景載入人行道實體圖層 (由 MapLibre WebWorker 背景加載，不阻塞主線程 UI)
+    if (layersConf.sidewalk && layersConf.sidewalk.visible) {
+      this.loadSpecificLayer('sidewalk', true).catch(err => {
+        console.warn('[LayerManager] 人行道圖層非同步載入異常:', err);
+      });
+    }
+
+    // 3. 平滑非同步預載其餘預設關閉圖層 (依序排隊，避免搶佔主線程與網路資源)
+    const lazyKeys = ['townBoundary', 'villageBoundary', 'accidents', 'poi', 'population'];
+    let delay = 250;
+    for (const key of lazyKeys) {
+      if (layersConf[key]) {
+        setTimeout(() => {
+          if (!this.loadedLayers.has(layersConf[key].id)) {
+            this.loadSpecificLayer(key, false).catch(() => {});
+          }
+        }, delay);
+        delay += 250;
+      }
+    }
+    console.log(`[LayerManager] ${countyConf.name} 核心圖層已啟動載入！`);
+  }
+
+  isLayerLoaded(layerId) {
+    return this.loadedLayers.has(layerId) && !!this.map.getLayer(layerId);
+  }
+
+  async loadByLayerId(layerId, visible = true) {
+    const countyConf = window.APP_CONFIG.counties[this.currentCounty];
+    if (!countyConf || !countyConf.layers) return;
+    for (const [key, conf] of Object.entries(countyConf.layers)) {
+      if (conf.id === layerId) {
+        return await this.loadSpecificLayer(key, visible);
+      }
+    }
+  }
+
+  async loadSpecificLayer(key, visible = true) {
+    const countyConf = window.APP_CONFIG.counties[this.currentCounty];
+    if (!countyConf || !countyConf.layers) return;
+    const conf = countyConf.layers[key];
+    if (!conf) return;
+
+    const dataPath = countyConf.dataPath;
+    const fileUrl = `${dataPath}/${conf.file}`;
+    const opacity = conf.defaultOpacity;
+
+    switch (key) {
+      case 'roadPriority':
+        await this.addRoadPriorityLayer(conf.id, fileUrl, visible, opacity);
+        break;
+      case 'sidewalk':
+        await this.addSidewalkLayer(conf.id, fileUrl, visible, opacity);
+        break;
+      case 'accidents':
+        await this.addAccidentsLayer(conf.id, fileUrl, visible, opacity);
+        break;
+      case 'poi':
+        await this.addPoiLayer(conf.id, fileUrl, visible, opacity);
+        break;
+      case 'population':
+        await this.addPolygonLayer(conf.id, fileUrl, visible, opacity);
+        break;
+      case 'townBoundary':
+        await this.addTownBoundaryLayer(conf.id, fileUrl, visible, opacity);
+        break;
+      case 'villageBoundary':
+        await this.addVillageBoundaryLayer(conf.id, fileUrl, visible, opacity);
+        break;
+    }
+  }
+
+  bindLayerInteractivity(layerId) {
+    if (!this.map.getLayer(layerId)) return;
+    if (!this._boundInteractions) this._boundInteractions = new Set();
+    if (this._boundInteractions.has(layerId)) return;
+    this._boundInteractions.add(layerId);
+
+    this.map.on('mouseenter', layerId, () => {
+      this.map.getCanvas().style.cursor = 'pointer';
+    });
+    this.map.on('mouseleave', layerId, () => {
+      this.map.getCanvas().style.cursor = '';
+    });
+    this.map.on('click', layerId, (e) => {
+      if (!e.features || !e.features[0]) return;
+      const feat = e.features[0];
+      const props = feat.properties;
+      this.showMapPopup(e.lngLat, layerId, props);
+      window.dispatchEvent(new CustomEvent('object-selected', {
+        detail: { layerId, properties: props, lngLat: e.lngLat }
+      }));
+    });
   }
 
   // 1. 道路優先度圖層
@@ -154,6 +183,7 @@ class LayerManager {
 
       this.loadedLayers.add(layerId);
       this.loadedLayers.add(`${layerId}-label`);
+      this.bindLayerInteractivity(layerId);
     } catch (e) {
       console.warn(`[LayerManager] 載入道路圖層失敗:`, e);
     }
@@ -162,12 +192,24 @@ class LayerManager {
   // 2. 人行道實體面圖層 (Polygon 實體鋪面填色 ＋ 輪廓描邊)
   async addSidewalkLayer(layerId, url, visible, defaultOpacity = 0.75) {
     const sourceId = `${layerId}-src`;
-    if (this.map.getSource(sourceId)) return;
+    if (this.map.getSource(sourceId)) {
+      if (this.map.getLayer(layerId)) {
+        this.map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
+      }
+      if (this.map.getLayer(`${layerId}-outline`)) {
+        this.map.setLayoutProperty(`${layerId}-outline`, 'visibility', visible ? 'visible' : 'none');
+      }
+      return;
+    }
 
     try {
-      const resp = await fetch(url);
-      const data = await resp.json();
-      this.map.addSource(sourceId, { type: 'geojson', data });
+      const fullUrl = new URL(url, window.location.href).href;
+      this.map.addSource(sourceId, {
+        type: 'geojson',
+        data: fullUrl,
+        tolerance: 0.8,
+        buffer: 0
+      });
 
       // (1) 實體面填色圖層 (Fill) - 低飽和度舒適配色
       this.map.addLayer({
@@ -215,6 +257,7 @@ class LayerManager {
 
       this.loadedLayers.add(layerId);
       this.loadedLayers.add(`${layerId}-outline`);
+      this.bindLayerInteractivity(layerId);
     } catch (e) {
       console.warn(`[LayerManager] 載入人行道圖層失敗:`, e);
     }
@@ -266,13 +309,17 @@ class LayerManager {
   // 3. 事故點圖層 (A1 死亡 / A2 受傷 - 🔺 警示三角形符號)
   async addAccidentsLayer(layerId, url, visible, defaultOpacity = 0.9) {
     const sourceId = `${layerId}-src`;
-    if (this.map.getSource(sourceId)) return;
+    if (this.map.getSource(sourceId)) {
+      if (this.map.getLayer(layerId)) {
+        this.map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
+      }
+      return;
+    }
 
     try {
       this.registerCustomIcons();
-      const resp = await fetch(url);
-      const data = await resp.json();
-      this.map.addSource(sourceId, { type: 'geojson', data });
+      const fullUrl = new URL(url, window.location.href).href;
+      this.map.addSource(sourceId, { type: 'geojson', data: fullUrl });
 
       this.map.addLayer({
         id: layerId,
@@ -299,6 +346,7 @@ class LayerManager {
         }
       });
       this.loadedLayers.add(layerId);
+      this.bindLayerInteractivity(layerId);
     } catch (e) {
       console.warn(`[LayerManager] 載入事故圖層失敗:`, e);
     }
@@ -307,12 +355,16 @@ class LayerManager {
   // 4. POI 設施點圖層 (臺灣通用電子地圖七大分類配色)
   async addPoiLayer(layerId, url, visible, defaultOpacity = 0.85) {
     const sourceId = `${layerId}-src`;
-    if (this.map.getSource(sourceId)) return;
+    if (this.map.getSource(sourceId)) {
+      if (this.map.getLayer(layerId)) {
+        this.map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
+      }
+      return;
+    }
 
     try {
-      const resp = await fetch(url);
-      const data = await resp.json();
-      this.map.addSource(sourceId, { type: 'geojson', data });
+      const fullUrl = new URL(url, window.location.href).href;
+      this.map.addSource(sourceId, { type: 'geojson', data: fullUrl });
 
       // 七大分類色彩表達式
       const colorExpression = [
@@ -348,6 +400,7 @@ class LayerManager {
         }
       });
       this.loadedLayers.add(layerId);
+      this.bindLayerInteractivity(layerId);
     } catch (e) {
       console.warn(`[LayerManager] 載入 POI 圖層失敗:`, e);
     }
@@ -356,12 +409,16 @@ class LayerManager {
   // 5. 最小統計區面圖層
   async addPolygonLayer(layerId, url, visible, defaultOpacity = 0.25) {
     const sourceId = `${layerId}-src`;
-    if (this.map.getSource(sourceId)) return;
+    if (this.map.getSource(sourceId)) {
+      if (this.map.getLayer(layerId)) {
+        this.map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
+      }
+      return;
+    }
 
     try {
-      const resp = await fetch(url);
-      const data = await resp.json();
-      this.map.addSource(sourceId, { type: 'geojson', data });
+      const fullUrl = new URL(url, window.location.href).href;
+      this.map.addSource(sourceId, { type: 'geojson', data: fullUrl });
 
       this.map.addLayer({
         id: layerId,
@@ -377,6 +434,7 @@ class LayerManager {
         }
       });
       this.loadedLayers.add(layerId);
+      this.bindLayerInteractivity(layerId);
     } catch (e) {
       console.warn(`[LayerManager] 載入統計區失敗:`, e);
     }
@@ -385,12 +443,22 @@ class LayerManager {
   // 6. 高雄市區界線圖層 (38 區)
   async addTownBoundaryLayer(layerId, url, visible, defaultOpacity = 0.85) {
     const sourceId = `${layerId}-src`;
-    if (this.map.getSource(sourceId)) return;
+    if (this.map.getSource(sourceId)) {
+      if (this.map.getLayer(layerId)) {
+        this.map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
+      }
+      if (this.map.getLayer(`${layerId}-fill`)) {
+        this.map.setLayoutProperty(`${layerId}-fill`, 'visibility', visible ? 'visible' : 'none');
+      }
+      if (this.map.getLayer(`${layerId}-label`)) {
+        this.map.setLayoutProperty(`${layerId}-label`, 'visibility', visible ? 'visible' : 'none');
+      }
+      return;
+    }
 
     try {
-      const resp = await fetch(url);
-      const data = await resp.json();
-      this.map.addSource(sourceId, { type: 'geojson', data });
+      const fullUrl = new URL(url, window.location.href).href;
+      this.map.addSource(sourceId, { type: 'geojson', data: fullUrl });
 
       // 透明填色層（便於滑鼠點擊判定）
       this.map.addLayer({
@@ -445,6 +513,7 @@ class LayerManager {
       this.loadedLayers.add(layerId);
       this.loadedLayers.add(`${layerId}-fill`);
       this.loadedLayers.add(`${layerId}-label`);
+      this.bindLayerInteractivity(`${layerId}-fill`);
     } catch (e) {
       console.warn(`[LayerManager] 載入區界失敗:`, e);
     }
@@ -453,12 +522,22 @@ class LayerManager {
   // 7. 高雄市村里界線圖層 (904 里)
   async addVillageBoundaryLayer(layerId, url, visible, defaultOpacity = 0.65) {
     const sourceId = `${layerId}-src`;
-    if (this.map.getSource(sourceId)) return;
+    if (this.map.getSource(sourceId)) {
+      if (this.map.getLayer(layerId)) {
+        this.map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
+      }
+      if (this.map.getLayer(`${layerId}-fill`)) {
+        this.map.setLayoutProperty(`${layerId}-fill`, 'visibility', visible ? 'visible' : 'none');
+      }
+      if (this.map.getLayer(`${layerId}-label`)) {
+        this.map.setLayoutProperty(`${layerId}-label`, 'visibility', visible ? 'visible' : 'none');
+      }
+      return;
+    }
 
     try {
-      const resp = await fetch(url);
-      const data = await resp.json();
-      this.map.addSource(sourceId, { type: 'geojson', data });
+      const fullUrl = new URL(url, window.location.href).href;
+      this.map.addSource(sourceId, { type: 'geojson', data: fullUrl });
 
       // 透明填色層（便於滑鼠點擊判定）
       this.map.addLayer({
@@ -514,13 +593,18 @@ class LayerManager {
       this.loadedLayers.add(layerId);
       this.loadedLayers.add(`${layerId}-fill`);
       this.loadedLayers.add(`${layerId}-label`);
+      this.bindLayerInteractivity(`${layerId}-fill`);
     } catch (e) {
       console.warn(`[LayerManager] 載入村里界失敗:`, e);
     }
   }
 
-  // 控制圖層開關
-  toggleLayer(layerId, visible) {
+  // 控制圖層開關 (若尚未載入則即時自動載入)
+  async toggleLayer(layerId, visible) {
+    if (visible && !this.isLayerLoaded(layerId)) {
+      await this.loadByLayerId(layerId, true);
+    }
+
     if (this.map.getLayer(layerId)) {
       this.map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
     }

@@ -820,6 +820,27 @@ class WebGISRequestHandler(SimpleHTTPRequestHandler):
             self._send_json({"logs": logs})
             return
 
+        # 靜態 GeoJSON 圖資透明 Gzip 壓縮串流支援 (大幅縮短傳輸時間並防止前端載入凍結)
+        clean_path = self.path.split('?')[0]
+        if clean_path.endswith('.geojson') and 'gzip' in self.headers.get('Accept-Encoding', ''):
+            rel_path = clean_path.lstrip('/')
+            local_gz_path = os.path.join(BASE_DIR, rel_path + '.gz')
+            if os.path.exists(local_gz_path) and os.path.isfile(local_gz_path):
+                try:
+                    gz_size = os.path.getsize(local_gz_path)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Content-Encoding", "gzip")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.send_header("Content-Length", str(gz_size))
+                    self.end_headers()
+                    with open(local_gz_path, 'rb') as f:
+                        import shutil
+                        shutil.copyfileobj(f, self.wfile)
+                    return
+                except Exception as e:
+                    print(f"[!] 串流 gzip 圖資失敗: {e}")
+
         return super().do_GET()
 
     def do_POST(self):
@@ -1101,13 +1122,12 @@ class WebGISRequestHandler(SimpleHTTPRequestHandler):
                 # 輸出 GeoJSON 檔案 (標準 UTF-8)
                 gdf.to_file(target_path, driver='GeoJSON', encoding='utf-8')
 
-                # 若為人行道圖資，同步壓縮為 .gz 檔案以支援 GitHub 託管與加速傳輸
-                if layer_key == "sidewalk":
-                    import gzip
-                    gz_path = os.path.join(target_dir, "sidewalk.geojson.gz")
-                    with open(target_path, 'rb') as f_in, gzip.open(gz_path, 'wb', compresslevel=6) as f_out:
-                        while chunk := f_in.read(1024 * 1024):
-                            f_out.write(chunk)
+                # 同步壓縮為 .gz 檔案以支援高速傳輸
+                import gzip
+                gz_path = target_path + ".gz"
+                with open(target_path, 'rb') as f_in, gzip.open(gz_path, 'wb', compresslevel=6) as f_out:
+                    while chunk := f_in.read(1024 * 1024):
+                        f_out.write(chunk)
 
                 # 即時清除並重新載入記憶體快取
                 if county in CACHE:

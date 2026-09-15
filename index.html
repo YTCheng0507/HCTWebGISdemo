@@ -985,9 +985,8 @@
       const webgisMap = new WebGISMap('map');
       await webgisMap.init();
 
-      // 2. 初始化圖層管理器
+      // 2. 初始化圖層管理器 (不在此處阻塞等待圖資傳輸，移至背景非同步執行)
       const layerMgr = new LayerManager(webgisMap);
-      await layerMgr.loadCountyLayers('kaohsiung');
 
       // 3. 初始化量測與雙坐標工具
       const measureTool = new MeasureTool(webgisMap);
@@ -1413,11 +1412,9 @@
         dashboard.closeDrawer();
       });
 
-      // 全域路名搜尋 (Tab 3 專用，支援 Enter 鍵)
-      const searchRoadInput = document.getElementById('tab-search-road-input') || document.getElementById('search-road-input');
-      const btnSearchRoad = document.getElementById('btn-tab-search-road') || document.getElementById('btn-search-road');
-      const executeSearchRoad = () => {
-        const query = searchRoadInput?.value.trim();
+      // 全域路名搜尋 (支援頂部導覽列與 Tab 3 側欄，支援 Enter 鍵)
+      const executeSearchRoad = (val) => {
+        const query = (val || '').trim();
         if (!query) return;
         const found = layerMgr.searchAndFlyToRoad(query);
         if (!found) {
@@ -1425,31 +1422,51 @@
         }
       };
 
-      if (btnSearchRoad) btnSearchRoad.addEventListener('click', executeSearchRoad);
-      if (searchRoadInput) {
-        searchRoadInput.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') executeSearchRoad();
-        });
-      }
+      ['tab-search-road-input', 'search-road-input'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+          input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') executeSearchRoad(input.value);
+          });
+        }
+      });
+      ['btn-tab-search-road', 'btn-search-road'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+          btn.addEventListener('click', () => {
+            const val = document.getElementById('tab-search-road-input')?.value || document.getElementById('search-road-input')?.value;
+            executeSearchRoad(val);
+          });
+        }
+      });
 
       // 雙向坐標定位 (WGS84 經緯度 或 TWD97 二度分帶，支援 Enter 鍵)
-      const coordLocateInput = document.getElementById('tab-coord-input') || document.getElementById('coord-input');
-      const btnCoordLocate = document.getElementById('btn-tab-coord-locate') || document.getElementById('btn-coord-locate');
-      const executeCoordLocate = () => {
-        const val = coordLocateInput?.value.trim();
-        if (!val) return;
-        const success = measureTool.zoomToInput(val);
+      const executeCoordLocate = (val) => {
+        const coord = (val || '').trim();
+        if (!coord) return;
+        const success = measureTool.zoomToInput(coord);
         if (!success) {
           alert('坐標格式錯誤！支援：\n• WGS84: 120.312, 22.627\n• TWD97: 247120, 2501234');
         }
       };
 
-      if (btnCoordLocate) btnCoordLocate.addEventListener('click', executeCoordLocate);
-      if (coordLocateInput) {
-        coordLocateInput.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') executeCoordLocate();
-        });
-      }
+      ['tab-coord-input', 'coord-input'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+          input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') executeCoordLocate(input.value);
+          });
+        }
+      });
+      ['btn-tab-coord-locate', 'btn-coord-locate'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+          btn.addEventListener('click', () => {
+            const val = document.getElementById('tab-coord-input')?.value || document.getElementById('coord-input')?.value;
+            executeCoordLocate(val);
+          });
+        }
+      });
 
       // --- 成果圖與地圖截圖匯出監聽 ---
       const btnExportMap = document.getElementById('btn-export-map');
@@ -1461,6 +1478,11 @@
 
       window.addEventListener('export-report-requested', (e) => {
         reportExporter.exportReportImage(webgisMap.map, e.detail);
+      });
+
+      // --- 9. 背景非同步啟動圖資載入 (不阻塞使用者介面互動，達到 0 秒反應) ---
+      layerMgr.loadCountyLayers('kaohsiung').catch(err => {
+        console.error('[LayerManager] 背景載入圖資發生錯誤:', err);
       });
 
       console.log('[System] 人行環境 WebGIS 資料平台所有模組就緒！');
