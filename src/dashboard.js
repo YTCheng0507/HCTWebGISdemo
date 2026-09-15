@@ -30,9 +30,13 @@ class DashboardManager {
 
     const closeBtn = document.getElementById('drawer-close-btn');
     if (closeBtn) {
-      closeBtn.addEventListener('click', () => {
+      const handleClose = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         this.closeDrawer();
-      });
+      };
+      closeBtn.addEventListener('click', handleClose);
+      closeBtn.addEventListener('touchend', handleClose);
     }
 
     if (this.drawerTabs) {
@@ -73,11 +77,23 @@ class DashboardManager {
   }
 
   openDrawer() {
-    this.drawer.style.transform = 'translateX(0)';
+    this.drawer.classList.add('open');
+    if (window.MobileUI && window.MobileUI.isPortrait && window.MobileUI.isPortrait()) {
+      this.drawer.classList.add('mobile-sheet-show');
+      this.drawer.style.transform = '';
+    } else {
+      this.drawer.style.transform = 'translateX(0)';
+    }
   }
 
   closeDrawer() {
-    this.drawer.style.transform = 'translateX(110%)';
+    this.drawer.classList.remove('open');
+    this.drawer.classList.remove('mobile-sheet-show');
+    if (window.MobileUI && window.MobileUI.isPortrait && window.MobileUI.isPortrait()) {
+      this.drawer.style.transform = 'translateY(115%)';
+    } else {
+      this.drawer.style.transform = 'translateX(115%)';
+    }
   }
 
   showLoading() {

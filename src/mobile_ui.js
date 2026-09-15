@@ -44,9 +44,20 @@ class MobileUIManager {
     console.log('[MobileUI] 行動端 UI 模組初始化完成！(支援直式 Bottom Sheet 與橫式 Side Dock)');
   }
 
-  // 判斷當前是否處於行動端螢幕尺寸
+  // 判斷當前是否處於行動端/觸控螢幕尺寸 (涵蓋手機與平板直橫向)
   isMobile() {
-    return window.innerWidth <= 820 || (window.innerHeight <= 520 && window.innerWidth <= 950);
+    const isTouch = ('ontouchstart' in window) || 
+                    (navigator.maxTouchPoints > 0) || 
+                    (navigator.msMaxTouchPoints > 0) ||
+                    (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+                    (window.matchMedia && window.matchMedia('(any-pointer: coarse)').matches) ||
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+                    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    return Boolean(
+      window.innerWidth <= 820 || 
+      (window.innerHeight <= 600 && window.innerWidth <= 1024) ||
+      (isTouch && window.innerWidth <= 1366)
+    );
   }
 
   // 判斷是否為直式模式
@@ -272,16 +283,28 @@ class MobileUIManager {
     // 關閉右側抽屜按鈕
     const rightCloseBtn = document.getElementById('drawer-close-btn');
     if (rightCloseBtn) {
-      rightCloseBtn.addEventListener('click', () => {
+      const handleClose = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         this.closeRightDrawerMobile();
-      });
+      };
+      rightCloseBtn.addEventListener('click', handleClose);
+      rightCloseBtn.addEventListener('touchend', handleClose);
     }
   }
 
   closeRightDrawerMobile() {
     if (this.rightDrawer) {
       this.rightDrawer.classList.remove('mobile-sheet-show');
-      this.rightDrawer.style.transform = '';
+      this.rightDrawer.classList.remove('open');
+      if (this.isPortrait()) {
+        this.rightDrawer.style.transform = 'translateY(115%)';
+      } else {
+        this.rightDrawer.style.transform = 'translateX(115%)';
+      }
+    }
+    if (window.webgisDashboard) {
+      window.webgisDashboard.closeDrawer();
     }
   }
 

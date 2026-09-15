@@ -113,6 +113,10 @@ class LayerManager {
       this.map.getCanvas().style.cursor = '';
     });
     this.map.on('click', layerId, (e) => {
+      // 若剛剛關閉過 Pop up，350ms 內忽略圖層點擊，避免關閉按鈕事件穿透底層要素重新觸發
+      if (this._justClosedPopup && (Date.now() - this._justClosedPopup < 350)) {
+        return;
+      }
       if (!e.features || !e.features[0]) return;
       const feat = e.features[0];
       const props = feat.properties;
@@ -796,6 +800,10 @@ class LayerManager {
       });
 
       this.map.on('click', layerId, (e) => {
+        // 若剛剛關閉過 Pop up，350ms 內忽略圖層點擊，避免關閉按鈕事件穿透底層要素重新觸發
+        if (this._justClosedPopup && (Date.now() - this._justClosedPopup < 350)) {
+          return;
+        }
         if (!e.features || !e.features[0]) return;
         const feat = e.features[0];
         const props = feat.properties;
@@ -811,9 +819,29 @@ class LayerManager {
     });
   }
 
+  isTouchOrMobile() {
+    const isTouch = ('ontouchstart' in window) || 
+                    (navigator.maxTouchPoints > 0) || 
+                    (navigator.msMaxTouchPoints > 0) ||
+                    (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+                    (window.matchMedia && window.matchMedia('(any-pointer: coarse)').matches) ||
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+                    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isSmallScreen = window.innerWidth <= 1024 || (window.innerHeight <= 600 && window.innerWidth <= 1100);
+    const isMobileUI = window.MobileUI && window.MobileUI.isMobile && window.MobileUI.isMobile();
+    return Boolean(isTouch || isSmallScreen || isMobileUI);
+  }
+
   showMapPopup(lngLat, layerId, props) {
     if (this.currentPopup) {
       this.currentPopup.remove();
+      this.currentPopup = null;
+    }
+
+    // 行動端/觸控裝置優化：觸控設備（手機、平板直向與橫向）全面取消地圖畫布上的氣泡跳出，
+    // 統一由側欄/底部抽屜卡片承載屬性表格，貫徹「以不影響圖面操作為最大原則」
+    if (this.isTouchOrMobile()) {
+      return;
     }
 
     let html = "";
@@ -913,21 +941,50 @@ class LayerManager {
       `;
     }
 
-    // 行動端/觸控裝置優化：取消地圖畫布上的氣泡跳出，由底部抽屜卡片專屬承載，以「不影響圖面操作為最大原則」
-    const isMobile = (window.MobileUI && window.MobileUI.isMobile()) || 
-                     (window.innerWidth <= 820) || 
-                     (window.matchMedia('(pointer: coarse)').matches);
-
-    if (isMobile) {
-      // 行動端不建立地圖氣泡 Pop up，保持圖面 100% 潔淨無遮擋
-      return;
-    }
-
     if (html) {
-      this.currentPopup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, offset: 12, maxWidth: '360px' })
+      // 附加底部顯著關閉按鈕，確保任何裝置均能 100% 輕易點擊關閉
+      const htmlWithClose = `
+        ${html}
+        <div style="margin-top: 10px; padding-top: 6px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end;">
+          <button type="button" class="btn-popup-close-action" style="padding: 4px 12px; font-size: 12px; font-weight: 600; color: #475569; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+            關閉 ✕
+          </button>
+        </div>
+      `;
+
+      this.currentPopup = new maplibregl.Popup({
+        closeButton: true,
+        closeOnClick: true,
+        offset: 12,
+        maxWidth: '380px'
+      })
         .setLngLat(lngLat)
-        .setHTML(html)
+        .setHTML(htmlWithClose)
         .addTo(this.map);
+
+      this.currentPopup.on('close', () => {
+        this._justClosedPopup = Date.now();
+        this.currentPopup = null;
+      });
+
+      // 監聽所有關閉按鈕，包含 MapLibre 原生右上角 ✕ 與自訂底部關閉按鈕
+      const popupElem = this.currentPopup.getElement();
+      if (popupElem) {
+        const closeBtns = popupElem.querySelectorAll('.maplibregl-popup-close-button, .btn-popup-close-action');
+        closeBtns.forEach(btn => {
+          const handleClose = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this._justClosedPopup = Date.now();
+            if (this.currentPopup) {
+              this.currentPopup.remove();
+              this.currentPopup = null;
+            }
+          };
+          btn.addEventListener('click', handleClose);
+          btn.addEventListener('touchend', handleClose);
+        });
+      }
     }
   }
 

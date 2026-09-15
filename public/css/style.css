@@ -439,9 +439,14 @@ body {
   display: flex;
   flex-direction: column;
   z-index: 10;
+  transform: translateX(115%);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid rgba(255, 255, 255, 0.4);
   overflow: hidden;
+}
+
+.right-drawer.open {
+  transform: translateX(0) !important;
 }
 
 /* 分析結果抽屜子分頁導覽列 */
@@ -521,14 +526,31 @@ body {
 }
 
 .drawer-close {
-  background: none;
-  border: none;
-  font-size: 18px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: bold;
   color: #64748b;
   cursor: pointer;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  touch-action: manipulation;
+  transition: all 0.15s ease;
+  user-select: none;
 }
-.drawer-close:hover {
-  color: #0f172a;
+.drawer-close:hover,
+.drawer-close:active {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fca5a5;
+  transform: scale(1.08);
 }
 
 .drawer-body {
@@ -818,13 +840,57 @@ body {
    ======================================================================== */
 .maplibregl-popup {
   max-width: 380px !important;
+  z-index: 50 !important;
 }
 
 .maplibregl-popup-content {
   padding: 14px 16px;
-  border-radius: 8px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
   font-family: inherit;
+  position: relative;
+}
+
+/* 強化 Pop up 右上角關閉按鈕，確保觸控設備與滑鼠均能極度輕易點擊 */
+.maplibregl-popup-close-button {
+  position: absolute !important;
+  top: 6px !important;
+  right: 6px !important;
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  min-height: 34px !important;
+  border-radius: 50% !important;
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  border: 1px solid #cbd5e1 !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  z-index: 100 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+  touch-action: manipulation !important;
+  transition: all 0.15s ease !important;
+}
+
+.maplibregl-popup-close-button:hover,
+.maplibregl-popup-close-button:active {
+  background: #fee2e2 !important;
+  color: #dc2626 !important;
+  border-color: #fca5a5 !important;
+  transform: scale(1.08) !important;
+}
+
+.btn-popup-close-action:hover,
+.btn-popup-close-action:active {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+  transform: scale(1.04) !important;
 }
 
 /* ========================================================================
@@ -1115,7 +1181,8 @@ body {
     padding-bottom: env(safe-area-inset-bottom);
   }
 
-  .right-drawer.mobile-sheet-show {
+  .right-drawer.mobile-sheet-show,
+  .right-drawer.open {
     transform: translateY(0) !important;
   }
 
@@ -1240,6 +1307,11 @@ body {
     max-width: 320px;
     max-height: calc(100% - 12px);
     border-radius: 8px;
+    transform: translateX(115%);
+  }
+
+  .right-drawer.open {
+    transform: translateX(0) !important;
   }
 
   .right-drawer .drawer-body {
