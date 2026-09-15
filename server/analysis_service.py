@@ -20,7 +20,15 @@ import sys
 import json
 import math
 
-# Windows 本地 QGIS Python PROJ 資料庫相容設定
+# Windows 本地 QGIS Python PROJ 資料庫與 GDAL DLL 相容設定
+if os.path.exists(r"C:\Program Files\QGIS 4.2.2\bin"):
+    os.environ["PATH"] = r"C:\Program Files\QGIS 4.2.2\bin;" + os.environ["PATH"]
+    if hasattr(os, "add_dll_directory"):
+        try:
+            os.add_dll_directory(r"C:\Program Files\QGIS 4.2.2\bin")
+        except Exception:
+            pass
+
 if "PROJ_DATA" not in os.environ and os.path.exists(r"C:\Program Files\QGIS 4.2.2\share\proj"):
     os.environ["PROJ_DATA"] = r"C:\Program Files\QGIS 4.2.2\share\proj"
     os.environ["PROJ_LIB"] = r"C:\Program Files\QGIS 4.2.2\share\proj"
@@ -29,8 +37,11 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import shape, Polygon, MultiPolygon
-from shapely.ops import transform
 import pyproj
+
+# 引入本機認證與 SQLite 模組
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import auth_db
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "public", "data")
@@ -106,7 +117,7 @@ def load_county_data(county="kaohsiung"):
         data['population_bsa'] = gdf
         
     CACHE[county] = data
-    print(f"[✓] 【{county}】圖資快取完成！")
+    print(f"[OK] 【{county}】圖資快取完成！")
     return data
 
 def perform_spatial_analysis(county, polygon_geom_wgs84):
@@ -421,6 +432,26 @@ class WebGISRequestHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=BASE_DIR, **kwargs)
 
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.end_headers()
+
+    def _get_auth_session(self):
+        auth_header = self.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header[7:].strip()
+            return auth_db.verify_session(token)
+        return None
+
+    def _get_client_ip(self):
+        forwarded = self.headers.get('X-Forwarded-For')
+        if forwarded:
+            return forwarded.split(',')[0].strip()
+        return self.client_address[0] if self.client_address else "127.0.0.1"
+
     def do_GET(self):
         if self.path == '/api/counties':
             counties = [d for d in os.listdir(DATA_DIR) if os.path.isdir(os.path.join(DATA_DIR, d))]
@@ -428,6 +459,13 @@ class WebGISRequestHandler(SimpleHTTPRequestHandler):
             return
         elif self.path == '/api/status':
             self._send_json({"status": "ready", "cached_counties": list(CACHE.keys())})
+            return
+        elif self.path == '/api/admin/me':
+            session = self._get_auth_session()
+            if not session:
+                self._send_json({"error": "未授權或登入已過期"}, status=401)
+                return
+            self._send_json({"user": session})
             return
         elif self.path == '/api/admin/status':
             county_data = CACHE.get("kaohsiung", {})
@@ -442,11 +480,32 @@ class WebGISRequestHandler(SimpleHTTPRequestHandler):
                 "cached_counties": list(CACHE.keys())
             })
             return
+        elif self.path == '/api/admin/users':
+            session = self._get_auth_session()
+            if not session:
+                self._send_json({"error": "未授權存取"}, status=401)
+                return
+            if session['role'] != 'superadmin':
+                self._send_json({"error": "權限不足：僅超級管理員可管理帳號"}, status=403)
+                return
+            users = auth_db.list_users()
+            self._send_json({"users": users})
+            return
+        elif self.path == '/api/admin/audit_logs':
+            session = self._get_auth_session()
+            if not session:
+                self._send_json({"error": "未授權存取"}, status=401)
+                return
+            logs = auth_db.get_audit_logs(limit=50)
+            self._send_json({"logs": logs})
+            return
+
         return super().do_GET()
 
     def do_POST(self):
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else "{}"
+        ip = self._get_client_ip()
 
         if self.path == '/api/analysis':
             try:
@@ -467,38 +526,149 @@ class WebGISRequestHandler(SimpleHTTPRequestHandler):
         elif self.path == '/api/admin/login':
             try:
                 req = json.loads(body)
-                pwd = req.get('password', '')
-                if pwd == ADMIN_PASSWORD:
-                    self._send_json({"success": True, "token": "admin-session-ok"})
+                username = req.get('username', '').strip()
+                password = req.get('password', '').strip()
+                if not username or not password:
+                    self._send_json({"success": False, "error": "請輸入帳號與密碼"}, status=400)
+                    return
+
+                user = auth_db.authenticate(username, password)
+                if user:
+                    token = auth_db.create_session(user['id'], user['username'], user['role'])
+                    auth_db.add_audit_log(user['username'], "login", f"登入系統成功 ({user['name']})", ip)
+                    self._send_json({
+                        "success": True,
+                        "token": token,
+                        "user": user
+                    })
                 else:
-                    self._send_json({"success": False, "error": "管理員密碼錯誤，請重新輸入"}, status=401)
+                    auth_db.add_audit_log(username, "login_fail", f"登入失敗：密碼錯誤", ip)
+                    self._send_json({"success": False, "error": "帳號或密碼錯誤，請重新確認！"}, status=401)
+            except Exception as e:
+                self._send_json({"error": str(e)}, status=500)
+            return
+
+        elif self.path == '/api/admin/logout':
+            auth_header = self.headers.get('Authorization', '')
+            if auth_header.startswith('Bearer '):
+                token = auth_header[7:].strip()
+                session = auth_db.verify_session(token)
+                if session:
+                    auth_db.add_audit_log(session['username'], "logout", "使用者登出", ip)
+                auth_db.delete_session(token)
+            self._send_json({"success": True})
+            return
+
+        elif self.path == '/api/admin/users':
+            session = self._get_auth_session()
+            if not session:
+                self._send_json({"error": "請先登入系統"}, status=401)
+                return
+            if session['role'] != 'superadmin':
+                self._send_json({"error": "權限不足：僅超級管理員可新增使用者"}, status=403)
+                return
+
+            try:
+                req = json.loads(body)
+                u = req.get('username', '').strip()
+                p = req.get('password', '').strip()
+                n = req.get('name', '').strip()
+                r = req.get('role', 'maintainer').strip()
+                ok, msg = auth_db.create_user(u, p, n, r)
+                if ok:
+                    auth_db.add_audit_log(session['username'], "create_user", f"建立帳號 {u} ({n}, {r})", ip)
+                    self._send_json({"success": True, "message": msg})
+                else:
+                    self._send_json({"success": False, "error": msg}, status=400)
+            except Exception as e:
+                self._send_json({"error": str(e)}, status=500)
+            return
+
+        elif self.path == '/api/admin/delete_user':
+            session = self._get_auth_session()
+            if not session:
+                self._send_json({"error": "請先登入系統"}, status=401)
+                return
+            if session['role'] != 'superadmin':
+                self._send_json({"error": "權限不足：僅超級管理員可刪除使用者"}, status=403)
+                return
+
+            try:
+                req = json.loads(body)
+                target_id = req.get('user_id')
+                ok, msg = auth_db.delete_user(target_id)
+                if ok:
+                    auth_db.add_audit_log(session['username'], "delete_user", f"刪除使用者 ID={target_id}", ip)
+                    self._send_json({"success": True, "message": msg})
+                else:
+                    self._send_json({"success": False, "error": msg}, status=400)
+            except Exception as e:
+                self._send_json({"error": str(e)}, status=500)
+            return
+
+        elif self.path == '/api/admin/change_password':
+            session = self._get_auth_session()
+            if not session:
+                self._send_json({"error": "請先登入系統"}, status=401)
+                return
+
+            try:
+                req = json.loads(body)
+                new_pwd = req.get('new_password', '').strip()
+                target_user_id = req.get('user_id')
+                # 只有超級管理員能更改他人密碼，一般成員只能改自己密碼
+                if target_user_id and session['role'] == 'superadmin':
+                    uid = target_user_id
+                else:
+                    uid = session['user_id']
+
+                ok, msg = auth_db.change_password(uid, new_pwd)
+                if ok:
+                    auth_db.add_audit_log(session['username'], "change_password", f"變更密碼 (User ID={uid})", ip)
+                    self._send_json({"success": True, "message": msg})
+                else:
+                    self._send_json({"success": False, "error": msg}, status=400)
             except Exception as e:
                 self._send_json({"error": str(e)}, status=500)
             return
 
         elif self.path == '/api/admin/reload_cache':
+            session = self._get_auth_session()
+            if not session:
+                self._send_json({"error": "未授權存取：請先登入管理者帳號"}, status=401)
+                return
             try:
                 county = "kaohsiung"
                 if county in CACHE:
                     del CACHE[county]
                 load_county_data(county)
+                auth_db.add_audit_log(session['username'], "reload_cache", f"重新加載 {county} 圖資快取與空間索引", ip)
                 self._send_json({"success": True, "message": "圖資快取已重新預熱完成"})
             except Exception as e:
                 self._send_json({"error": str(e)}, status=500)
             return
 
         elif self.path == '/api/admin/update_weights':
+            session = self._get_auth_session()
+            if not session:
+                self._send_json({"error": "未授權存取：請先登入管理者帳號"}, status=401)
+                return
             try:
                 req = json.loads(body)
                 for k in ["weight_walk", "weight_safety", "weight_live", "threshold_width"]:
                     if k in req:
                         EVAL_CONFIG[k] = float(req[k])
+                auth_db.add_audit_log(session['username'], "update_weights", f"調整評鑑權重: 步行={EVAL_CONFIG['weight_walk']}, 安全={EVAL_CONFIG['weight_safety']}, 機能={EVAL_CONFIG['weight_live']}, 淨寬={EVAL_CONFIG['threshold_width']}m", ip)
                 self._send_json({"success": True, "weights": EVAL_CONFIG})
             except Exception as e:
                 self._send_json({"error": str(e)}, status=500)
             return
 
         elif self.path == '/api/admin/upload_layer':
+            session = self._get_auth_session()
+            if not session:
+                self._send_json({"error": "未授權存取：請先登入管理者帳號"}, status=401)
+                return
             try:
                 req = json.loads(body)
                 county = req.get('county', 'kaohsiung')
@@ -541,6 +711,7 @@ class WebGISRequestHandler(SimpleHTTPRequestHandler):
                 load_county_data(county)
 
                 cnt = len(geojson_data.get('features', []))
+                auth_db.add_audit_log(session['username'], "upload_layer", f"置換更新圖資 {filename} ({cnt} 筆圖徵)", ip)
                 self._send_json({"success": True, "message": f"圖資 {filename} 更新成功！共 {cnt} 筆圖徵", "count": cnt})
             except Exception as e:
                 import traceback
@@ -555,6 +726,8 @@ class WebGISRequestHandler(SimpleHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE")
         self.send_header("Content-Length", str(len(out)))
         self.end_headers()
         self.wfile.write(out)

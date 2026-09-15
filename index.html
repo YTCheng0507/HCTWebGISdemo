@@ -81,7 +81,8 @@
         </button>
         <!-- 已登入狀態 (預設隱藏) -->
         <div id="admin-user-controls" style="display: none; align-items: center; gap: 6px;">
-          <span style="font-size: 11px; background: #16a34a; color: white; padding: 2px 8px; border-radius: 10px; font-weight: 600;">已登入</span>
+          <span id="admin-user-name" style="font-size: 12.5px; color: #f1f5f9; font-weight: 600;">系統管理員</span>
+          <span id="admin-role-badge" style="font-size: 10.5px; background: #16a34a; color: white; padding: 2px 7px; border-radius: 10px; font-weight: 600;">超級管理員</span>
           <button id="btn-open-panel" class="btn btn-primary" style="padding: 5px 10px; font-size: 13px; background: #2563eb; color: #fff; cursor: pointer;">
             🛠️ 維護後台
           </button>
@@ -608,18 +609,22 @@
 
   <!-- 管理者登入彈窗 -->
   <div id="modal-admin-login" class="admin-modal-backdrop">
-    <div class="admin-modal-box" style="width: 380px;">
+    <div class="admin-modal-box" style="width: 400px;">
       <div class="admin-modal-header">
-        <div class="admin-modal-title">🔐 系統維護者登入</div>
+        <div class="admin-modal-title">🔐 系統維護者身分驗證</div>
         <button id="btn-close-login" class="admin-modal-close" title="關閉">✕</button>
       </div>
       <div class="admin-modal-body">
-        <p style="color: #64748b; font-size: 13px; margin: 0;">
-          僅供系統維護人員登入進行圖資更新、評鑑權重調整與快取管理。一般大眾可直接關閉此視窗瀏覽查詢。
+        <p style="color: #64748b; font-size: 12.5px; margin: 0; line-height: 1.5;">
+          登入後可進行圖資置換、評鑑權重微調與帳號權限管理。一般市民與訪客免登入即可使用所有 GIS 空間分析功能。
         </p>
         <div>
-          <label style="display: block; font-weight: 600; font-size: 13px; margin-bottom: 6px; color: #1e293b;">管理員密碼：</label>
-          <input type="password" id="admin-password-input" placeholder="請輸入管理密碼 (預設 admin888)" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 14px;" />
+          <label style="display: block; font-weight: 600; font-size: 13px; margin-bottom: 5px; color: #1e293b;">管理者帳號：</label>
+          <input type="text" id="admin-username-input" placeholder="請輸入帳號 (預設 admin)" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13.5px;" />
+        </div>
+        <div>
+          <label style="display: block; font-weight: 600; font-size: 13px; margin-bottom: 5px; color: #1e293b;">登入密碼：</label>
+          <input type="password" id="admin-password-input" placeholder="請輸入密碼 (預設 admin888)" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13.5px;" />
         </div>
         <div id="admin-login-error" style="display: none; color: #dc2626; font-size: 12.5px; background: #fef2f2; border: 1px solid #fecaca; padding: 6px 10px; border-radius: 4px;"></div>
         <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px;">
@@ -632,16 +637,18 @@
 
   <!-- 管理者維護控制台彈窗 -->
   <div id="modal-admin-panel" class="admin-modal-backdrop">
-    <div class="admin-modal-box" style="width: 620px;">
+    <div class="admin-modal-box" style="width: 680px;">
       <div class="admin-modal-header">
         <div class="admin-modal-title">🛠️ 人行環境平台 維護控制台</div>
         <button id="btn-close-panel" class="admin-modal-close" title="關閉">✕</button>
       </div>
 
       <nav class="admin-modal-tabs">
-        <button class="admin-tab-btn active" data-admin-tab="admin-tab-upload">📁 圖資上傳更新</button>
-        <button class="admin-tab-btn" data-admin-tab="admin-tab-weights">⚙️ 評鑑權重調整</button>
-        <button class="admin-tab-btn" data-admin-tab="admin-tab-status">⚡ 系統快取與狀態</button>
+        <button class="admin-tab-btn active" data-admin-tab="admin-tab-upload">📁 圖資更新</button>
+        <button class="admin-tab-btn" data-admin-tab="admin-tab-weights">⚙️ 評鑑權重</button>
+        <button class="admin-tab-btn" data-admin-tab="admin-tab-status">⚡ 系統快取</button>
+        <button class="admin-tab-btn" data-admin-tab="admin-tab-users" id="admin-tab-btn-users">👥 帳號管理</button>
+        <button class="admin-tab-btn" data-admin-tab="admin-tab-logs" id="admin-tab-btn-logs">📜 稽核日誌</button>
       </nav>
 
       <div class="admin-modal-body">
@@ -755,6 +762,105 @@
               ⚡ 重新加載所有圖資與索引快取
             </button>
             <span id="admin-reload-status" style="font-size: 12.5px; color: #16a34a;"></span>
+          </div>
+        </div>
+
+        <!-- 分頁 4: 帳號權限管理 (超級管理員專屬) -->
+        <div id="admin-tab-users" class="admin-tab-pane">
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 13px; line-height: 1.6;">
+            👥 <strong>管理員名冊與權限指派</strong>：每位同仁擁有專屬帳號，所有異動均會留下審核日誌。
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 700; font-size: 13px; color: #1e293b;">現有管理者帳號清單</span>
+            <button id="btn-toggle-add-user" class="btn btn-primary" style="padding: 5px 12px; font-size: 12.5px; border-radius: 4px; cursor: pointer;">
+              ➕ 新增維護同仁
+            </button>
+          </div>
+
+          <!-- 新增使用者摺疊表單 -->
+          <div id="form-add-user" style="display: none; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; flex-direction: column; gap: 8px;">
+            <div style="font-weight: 600; font-size: 13px; color: #0f172a;">建立新管理者帳號</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div>
+                <label style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 3px;">登入帳號 (Username)：</label>
+                <input type="text" id="new-user-username" placeholder="英文小寫或底線 (如: analyst_chen)" style="width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px;" />
+              </div>
+              <div>
+                <label style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 3px;">同仁姓名 / 職稱：</label>
+                <input type="text" id="new-user-name" placeholder="如: 陳研究員" style="width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px;" />
+              </div>
+              <div>
+                <label style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 3px;">初始密碼：</label>
+                <input type="password" id="new-user-password" placeholder="請設定密碼 (至少 4 字元)" style="width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px;" />
+              </div>
+              <div>
+                <label style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 3px;">角色權限：</label>
+                <select id="new-user-role" style="width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px;">
+                  <option value="maintainer">一般維護人員 (可更新圖資、調整權重)</option>
+                  <option value="superadmin">超級管理員 (可管理所有帳號與全功能)</option>
+                </select>
+              </div>
+            </div>
+            <div id="add-user-status" style="display: none; font-size: 12px; padding: 4px 8px; border-radius: 4px;"></div>
+            <div style="display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px;">
+              <button id="btn-cancel-add-user" class="btn" style="padding: 4px 10px; font-size: 12px; background: #e2e8f0; border-radius: 4px; cursor: pointer;">取消</button>
+              <button id="btn-submit-add-user" class="btn btn-primary" style="padding: 4px 12px; font-size: 12px; border-radius: 4px; cursor: pointer;">儲存建立</button>
+            </div>
+          </div>
+
+          <!-- 使用者清單表格 -->
+          <div style="max-height: 180px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
+              <thead style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0;">
+                <tr>
+                  <th style="padding: 6px 8px; text-align: left;">帳號</th>
+                  <th style="padding: 6px 8px; text-align: left;">姓名</th>
+                  <th style="padding: 6px 8px; text-align: left;">身分角色</th>
+                  <th style="padding: 6px 8px; text-align: left;">最後登入</th>
+                  <th style="padding: 6px 8px; text-align: center; width: 60px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="user-list-tbody">
+                <tr><td colspan="5" style="padding: 12px; text-align: center; color: #94a3b8;">載入中...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 個人修改密碼區 -->
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; margin-top: 4px;">
+            <div style="font-weight: 600; font-size: 13px; color: #1e293b; margin-bottom: 6px;">🔑 修改目前登入密碼</div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input type="password" id="input-change-password" placeholder="請輸入新密碼 (至少 4 字元)" style="flex: 1; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px;" />
+              <button id="btn-submit-change-password" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12.5px; border-radius: 4px; cursor: pointer; white-space: nowrap;">確認修改密碼</button>
+            </div>
+            <span id="change-pwd-status" style="font-size: 12px; display: block; margin-top: 4px;"></span>
+          </div>
+        </div>
+
+        <!-- 分頁 5: 操作稽核日誌 -->
+        <div id="admin-tab-logs" class="admin-tab-pane">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 13px; color: #64748b;">📜 顯示系統最近 50 筆異動與登入軌跡</span>
+            <button id="btn-refresh-logs" class="btn" style="padding: 4px 10px; font-size: 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 4px; cursor: pointer;">
+              🔄 重新整理日誌
+            </button>
+          </div>
+
+          <div style="max-height: 280px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+              <thead style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0;">
+                <tr>
+                  <th style="padding: 6px 8px; text-align: left; width: 130px;">時間</th>
+                  <th style="padding: 6px 8px; text-align: left; width: 80px;">人員</th>
+                  <th style="padding: 6px 8px; text-align: left; width: 90px;">操作動作</th>
+                  <th style="padding: 6px 8px; text-align: left;">詳細說明</th>
+                </tr>
+              </thead>
+              <tbody id="audit-log-tbody">
+                <tr><td colspan="4" style="padding: 12px; text-align: center; color: #94a3b8;">載入中...</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
