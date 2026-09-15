@@ -48,38 +48,59 @@ class ReportExporter {
 
       // 3. 繪製右上角評估總分卡片
       const score = data.score || {};
-      const cardW = Math.min(420 * scale, w * 0.38);
+      const cardW = Math.min(460 * scale, w * 0.42);
       const cardH = 340 * scale;
       const cardX = w - cardW - (24 * scale);
       const cardY = 24 * scale;
 
       this.drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 12 * scale, 'rgba(15, 23, 42, 0.92)');
 
-      // 總分標題與大分數
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = `bold ${14 * scale}px "Microsoft JhengHei", sans-serif`;
-      ctx.fillText('人本步行環境優良度總分', cardX + 24 * scale, cardY + 36 * scale);
+      // 1. 頂部列：左側標題，右側等級評定膠囊徽章
+      const level = score.env_level || '評估完成';
+      let badgeColor = '#4ade80'; // 綠 (A, B)
+      let badgeBg = 'rgba(74, 222, 128, 0.16)';
+      if (level.includes('D') || level.includes('E')) {
+        badgeColor = '#f87171';
+        badgeBg = 'rgba(248, 113, 113, 0.18)';
+      } else if (level.includes('C')) {
+        badgeColor = '#fbbf24';
+        badgeBg = 'rgba(251, 191, 36, 0.18)';
+      }
 
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = `bold ${13 * scale}px "Microsoft JhengHei", sans-serif`;
+      ctx.fillText('人本步行環境優良度總分', cardX + 24 * scale, cardY + 34 * scale);
+
+      // 右上角精緻等級膠囊徽章
+      ctx.font = `bold ${12 * scale}px "Microsoft JhengHei", sans-serif`;
+      const badgeText = `${level}`;
+      const badgeTextW = ctx.measureText(badgeText).width;
+      const badgePadX = 10 * scale;
+      const badgeW = badgeTextW + badgePadX * 2;
+      const badgeH = 22 * scale;
+      const badgeX = cardX + cardW - (24 * scale) - badgeW;
+      const badgeY = cardY + 18 * scale;
+
+      this.drawRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 4 * scale, badgeBg);
+      ctx.strokeStyle = badgeColor;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = badgeColor;
+      ctx.textAlign = 'center';
+      ctx.fillText(badgeText, badgeX + (badgeW / 2), badgeY + (15.5 * scale));
+      ctx.textAlign = 'left';
+
+      // 2. 第二列：超大評分數字 + 自動動態間距的 / 100 分 (永不重疊)
       const totalScore = score.total_score !== undefined ? score.total_score : '--';
       ctx.fillStyle = '#38bdf8';
-      ctx.font = `bold ${40 * scale}px "Microsoft JhengHei", sans-serif`;
+      ctx.font = `bold ${38 * scale}px "Microsoft JhengHei", sans-serif`;
       ctx.fillText(`${totalScore}`, cardX + 24 * scale, cardY + 84 * scale);
 
+      const scoreW = ctx.measureText(`${totalScore}`).width;
       ctx.fillStyle = '#64748b';
-      ctx.font = `${16 * scale}px "Microsoft JhengHei", sans-serif`;
-      ctx.fillText('/ 100 分', cardX + (120 * scale), cardY + 84 * scale);
-
-      // 等級評定文字 (無底框，靠右對齊 cardX + cardW - 24，絕對不超出卡片)
-      const level = score.env_level || '評估完成';
-      let badgeColor = '#4ade80'; // 綠
-      if (level.includes('D') || level.includes('E')) badgeColor = '#f87171';
-      else if (level.includes('C')) badgeColor = '#fbbf24';
-      
-      ctx.fillStyle = badgeColor;
-      ctx.font = `bold ${14 * scale}px "Microsoft JhengHei", sans-serif`;
-      ctx.textAlign = 'right';
-      ctx.fillText(`等級評定：${level}`, cardX + cardW - (24 * scale), cardY + 80 * scale);
-      ctx.textAlign = 'left';
+      ctx.font = `${15 * scale}px "Microsoft JhengHei", sans-serif`;
+      ctx.fillText('/ 100 分', cardX + 24 * scale + scoreW + (8 * scale), cardY + 84 * scale);
 
       // 分隔線
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
