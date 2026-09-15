@@ -127,8 +127,16 @@ def perform_spatial_analysis(county, polygon_geom_wgs84):
     """
     data = load_county_data(county)
     
-    # 坐標結構防呆相容 (防止 PowerShell 或部分客戶端將三維陣列扁平化為二維)
-    if isinstance(polygon_geom_wgs84, dict) and "coordinates" in polygon_geom_wgs84:
+    # 坐標結構防呆相容 (支援 GeoJSON Geometry 物件，亦相容二維/三維座標陣列)
+    if isinstance(polygon_geom_wgs84, list):
+        if len(polygon_geom_wgs84) > 0 and isinstance(polygon_geom_wgs84[0], list):
+            if len(polygon_geom_wgs84[0]) > 0 and isinstance(polygon_geom_wgs84[0][0], (int, float)):
+                # 二維 [[x,y], [x,y], ...] -> 包裝為 Polygon
+                polygon_geom_wgs84 = {"type": "Polygon", "coordinates": [polygon_geom_wgs84]}
+            elif len(polygon_geom_wgs84[0]) > 0 and isinstance(polygon_geom_wgs84[0][0], list):
+                # 三維 [[[x,y], [x,y], ...]]
+                polygon_geom_wgs84 = {"type": "Polygon", "coordinates": polygon_geom_wgs84}
+    elif isinstance(polygon_geom_wgs84, dict) and "coordinates" in polygon_geom_wgs84:
         coords = polygon_geom_wgs84["coordinates"]
         if isinstance(coords, list) and len(coords) > 0:
             if isinstance(coords[0], list) and len(coords[0]) > 0 and isinstance(coords[0][0], (int, float)):
