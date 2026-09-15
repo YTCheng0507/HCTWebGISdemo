@@ -816,6 +816,9 @@ class WebGISRequestHandler(SimpleHTTPRequestHandler):
             if not session:
                 self._send_json({"error": "未授權存取"}, status=401)
                 return
+            if session['role'] != 'superadmin':
+                self._send_json({"error": "權限不足：僅超級管理員可查閱稽核日誌"}, status=403)
+                return
             logs = auth_db.get_audit_logs(limit=50)
             self._send_json({"logs": logs})
             return

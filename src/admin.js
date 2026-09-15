@@ -285,13 +285,19 @@ class AdminPanel {
           this.adminRoleBadge.style.background = '#0284c7';
         }
       }
-      // 帳號管理分頁僅超級管理員可見
+      // 帳號管理與稽核日誌分頁僅超級管理員可見
+      const isSuperAdmin = this.currentUser.role === 'superadmin';
       if (this.tabBtnUsers) {
-        this.tabBtnUsers.style.display = this.currentUser.role === 'superadmin' ? 'block' : 'none';
+        this.tabBtnUsers.style.display = isSuperAdmin ? 'block' : 'none';
+      }
+      if (this.tabBtnLogs) {
+        this.tabBtnLogs.style.display = isSuperAdmin ? 'block' : 'none';
       }
     } else {
       if (this.btnOpenLogin) this.btnOpenLogin.style.display = 'flex';
       if (this.adminUserControls) this.adminUserControls.style.display = 'none';
+      if (this.tabBtnUsers) this.tabBtnUsers.style.display = 'none';
+      if (this.tabBtnLogs) this.tabBtnLogs.style.display = 'none';
     }
   }
 
