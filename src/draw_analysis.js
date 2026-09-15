@@ -392,6 +392,8 @@ class DrawAnalysisTool {
       }
 
       const result = await resp.json();
+      result.geometry = geometry;
+      window.lastAnalysisGeometry = geometry;
       console.log('[DrawAnalysis] 空間分析計算成功！結果:', result);
       window.dispatchEvent(new CustomEvent('analysis-complete', { detail: result }));
     } catch (err) {

@@ -48,13 +48,16 @@
   <!-- 頂部導覽列 -->
   <header class="navbar">
     <div class="nav-brand">
-      <h1>人行環境 GIS 資料平台</h1>
-      <span style="font-size: 11px; background: #0284c7; color: white; padding: 2px 8px; border-radius: 12px; margin-left: 4px;">人本交通評估系統</span>
+      <h1 class="nav-brand-title">
+        <span class="brand-text-full">人行環境 GIS 資料平台</span>
+        <span class="brand-text-short">人行環境 GIS</span>
+      </h1>
+      <span class="nav-brand-tag" style="font-size: 11px; background: #0284c7; color: white; padding: 2px 8px; border-radius: 12px; margin-left: 4px;">人本交通評估系統</span>
     </div>
 
     <div class="nav-controls">
       <!-- 縣市切換下拉 (支援未來宜蘭、台東無縫切換) -->
-      <label style="font-size: 13px; color: #cbd5e1;">縣市：</label>
+      <label class="county-label" style="font-size: 13px; color: #cbd5e1;">縣市：</label>
       <select id="county-selector" class="county-select">
         <option value="kaohsiung">高雄市</option>
         <option value="yilan" disabled>宜蘭縣 (下週擴充)</option>
@@ -62,16 +65,18 @@
       </select>
 
       <!-- 行動端專屬搜尋按鈕 (點擊切換至量測與搜尋分頁) -->
-      <button id="btn-mobile-search-toggle" class="nav-mobile-search-btn" title="搜尋路名與坐標">🔍 搜尋</button>
+      <button id="btn-mobile-search-toggle" class="nav-mobile-search-btn" title="搜尋路名與坐標">
+        <span>🔍</span><span class="btn-text-responsive"> 搜尋</span>
+      </button>
 
       <!-- 全域關鍵字搜尋 (路名、路口、ID) -->
-      <div style="display: flex; gap: 4px;">
+      <div class="desktop-search-group" style="display: flex; gap: 4px;">
         <input type="text" id="search-road-input" placeholder="搜尋路名 (如: 大順一路)" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #475569; background: #334155; color: #fff; font-size: 13px; width: 170px;" />
         <button id="btn-search-road" class="btn btn-primary" style="padding: 5px 10px;">搜尋</button>
       </div>
 
       <!-- 坐標快速定位 (支援 WGS84 經緯度 或 TWD97 二度分帶) -->
-      <div style="display: flex; gap: 4px;">
+      <div class="desktop-coord-group" style="display: flex; gap: 4px;">
         <input type="text" id="coord-input" placeholder="經緯度或 TWD97 X,Y" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #475569; background: #334155; color: #fff; font-size: 13px; width: 170px;" />
         <button id="btn-coord-locate" class="btn btn-secondary" style="padding: 5px 10px;">定位</button>
       </div>
@@ -79,17 +84,17 @@
       <!-- 管理者按鈕 / 狀態區 -->
       <div id="admin-nav-area" style="display: flex; align-items: center; gap: 6px; margin-left: 6px; border-left: 1px solid #475569; padding-left: 8px;">
         <!-- 未登入狀態 -->
-        <button id="btn-open-login" class="btn btn-secondary" style="padding: 5px 10px; font-size: 13px; background: #334155; border: 1px solid #64748b; color: #f8fafc; display: flex; align-items: center; gap: 4px; cursor: pointer;">
-          <span>🔐</span> 管理者登入
+        <button id="btn-open-login" class="btn btn-secondary" style="padding: 5px 10px; font-size: 13px; background: #334155; border: 1px solid #64748b; color: #f8fafc; display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap;">
+          <span>🔐</span><span class="admin-login-text"> 管理者登入</span>
         </button>
         <!-- 已登入狀態 (預設隱藏) -->
         <div id="admin-user-controls" style="display: none; align-items: center; gap: 6px;">
           <span id="admin-user-name" style="font-size: 12.5px; color: #f1f5f9; font-weight: 600;">系統管理員</span>
           <span id="admin-role-badge" style="font-size: 10.5px; background: #16a34a; color: white; padding: 2px 7px; border-radius: 10px; font-weight: 600;">超級管理員</span>
-          <button id="btn-open-panel" class="btn btn-primary" style="padding: 5px 10px; font-size: 13px; background: #2563eb; color: #fff; cursor: pointer;">
-            🛠️ 維護後台
+          <button id="btn-open-panel" class="btn btn-primary" style="padding: 5px 10px; font-size: 13px; background: #2563eb; color: #fff; cursor: pointer; white-space: nowrap;">
+            <span>🛠️</span><span class="admin-btn-text"> 後台</span>
           </button>
-          <button id="btn-admin-logout" class="btn" style="padding: 5px 8px; font-size: 12px; background: transparent; border: 1px solid #64748b; color: #94a3b8; cursor: pointer;">
+          <button id="btn-admin-logout" class="btn" style="padding: 5px 8px; font-size: 12px; background: transparent; border: 1px solid #64748b; color: #94a3b8; cursor: pointer; white-space: nowrap;">
             登出
           </button>
         </div>

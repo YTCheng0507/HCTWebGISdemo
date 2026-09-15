@@ -888,30 +888,70 @@ body {
   cursor: pointer;
 }
 
+.brand-text-short {
+  display: none;
+}
+.brand-text-full {
+  display: inline;
+}
+.btn-text-responsive {
+  display: inline;
+}
+
 /* ========================================================================
    【行動端直式響應式：底部抽屜 Bottom Sheet (Peek / Half / Full)】
    ======================================================================== */
-@media (max-width: 820px) and (orientation: portrait), (max-width: 600px) {
-  /* 頂部導覽列簡化 */
+@media (max-width: 820px) and (orientation: portrait), (max-width: 650px) {
+  /* 頂部導覽列簡化與防擠壓 */
   .navbar {
-    height: 50px;
-    padding: 0 12px;
+    height: 48px;
+    padding: 0 10px;
+    gap: 8px;
   }
 
-  .nav-brand h1 {
-    font-size: 15px;
+  .nav-brand {
+    gap: 6px;
+    min-width: 0;
+    flex-shrink: 1;
+    overflow: hidden;
+  }
+
+  .brand-text-full {
+    display: none !important;
+  }
+
+  .brand-text-short {
+    display: inline !important;
+    font-size: 14.5px;
+    font-weight: 700;
     white-space: nowrap;
   }
 
-  .nav-brand span {
+  .nav-brand-tag {
     display: none !important; /* 隱藏副標籤節省空間 */
   }
 
   .nav-controls {
-    gap: 8px;
+    gap: 6px;
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  .county-label {
+    display: none !important; /* 手機隱藏「縣市：」文字標籤 */
+  }
+
+  .county-select {
+    padding: 4px 6px;
+    font-size: 12px;
+    max-width: 72px;
+    height: 32px;
+    flex-shrink: 0;
   }
 
   /* 隱藏桌機版的大輸入框 */
+  .desktop-search-group,
+  .desktop-coord-group,
   #search-road-input,
   #btn-search-road,
   #coord-input,
@@ -922,23 +962,57 @@ body {
   .nav-mobile-search-btn {
     display: inline-flex !important;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px 8px !important;
+    font-size: 12px;
+    height: 32px;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 
-  .county-select {
-    padding: 4px 6px;
-    font-size: 12px;
-    max-width: 80px;
+  .btn-text-responsive {
+    display: none !important; /* 手機精簡為 🔍 圖示 */
+  }
+
+  #admin-nav-area {
+    margin-left: 0;
+    padding-left: 4px;
+    border-left: 1px solid #475569;
+    flex-shrink: 0;
   }
 
   #btn-open-login {
     padding: 4px 8px !important;
     font-size: 12px !important;
+    height: 32px;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 
-  #admin-nav-area {
-    margin-left: 2px;
-    padding-left: 4px;
+  .admin-login-text {
+    display: none !important; /* 手機精簡為 🔐 圖示 */
+  }
+
+  #admin-user-name, 
+  #admin-role-badge {
+    display: none !important;
+  }
+
+  #btn-open-panel {
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+    height: 32px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  #btn-admin-logout {
+    padding: 4px 6px !important;
+    font-size: 11px !important;
+    height: 32px;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   /* 主畫布與滿版視圖 */

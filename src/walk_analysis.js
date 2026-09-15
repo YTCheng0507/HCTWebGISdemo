@@ -159,6 +159,8 @@ class WalkAnalysisTool {
       }
 
       const result = await resp.json();
+      result.geometry = geometry;
+      window.lastAnalysisGeometry = geometry;
       console.log('[WalkAnalysis] 生活圈分析計算成功！', result);
       window.dispatchEvent(new CustomEvent('analysis-complete', { detail: result }));
     } catch (err) {
