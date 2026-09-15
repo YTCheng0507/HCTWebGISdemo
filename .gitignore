@@ -5,6 +5,8 @@ __pycache__/
 .env
 .venv/
 *.db
+!server/admin.db
+!server/users_seed.json
 
 # 忽略超過 GitHub 100MB 限制的原始檔案 (已提供 47MB 的 sidewalk.geojson.gz 追蹤)
 public/data/kaohsiung/sidewalk.geojson

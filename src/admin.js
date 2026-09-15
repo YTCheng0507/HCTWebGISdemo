@@ -120,6 +120,25 @@ class AdminPanel {
     if (this.inputUsername) this.inputUsername.addEventListener('keydown', handleEnterKey);
     if (this.inputPassword) this.inputPassword.addEventListener('keydown', handleEnterKey);
 
+    // 密碼顯示/隱藏切換功能
+    document.querySelectorAll('.btn-toggle-password').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetId = btn.getAttribute('data-target');
+        const input = document.getElementById(targetId);
+        if (!input) return;
+        if (input.type === 'password') {
+          input.type = 'text';
+          btn.innerText = '🙈';
+          btn.setAttribute('title', '隱藏密碼');
+        } else {
+          input.type = 'password';
+          btn.innerText = '👁️';
+          btn.setAttribute('title', '顯示密碼');
+        }
+      });
+    });
+
     // 登出按鈕
     if (this.btnLogout) {
       this.btnLogout.addEventListener('click', () => this.logout());

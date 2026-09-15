@@ -10,6 +10,7 @@
 """
 
 import os
+import json
 import sqlite3
 import hashlib
 import secrets
@@ -17,6 +18,7 @@ import time
 from datetime import datetime
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "admin.db")
+SEED_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users_seed.json")
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -37,6 +39,74 @@ def hash_password(password: str, salt: str = None):
 def verify_password(password: str, salt: str, expected_hash: str) -> bool:
     calc_hash, _ = hash_password(password, salt)
     return secrets.compare_digest(calc_hash, expected_hash)
+
+def export_users_seed():
+    """將目前的管理者帳號與雜湊密碼持久化儲存至 users_seed.json，避免部署重置"""
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id, username, password_hash, salt, name, role, created_at, last_login FROM users ORDER BY id ASC")
+        rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        if rows:
+            with open(SEED_PATH, "w", encoding="utf-8") as f:
+                json.dump(rows, f, ensure_ascii=False, indent=2)
+            print(f"[AuthDB] 已成功持久化同步 {len(rows)} 位使用者至 {SEED_PATH}")
+    except Exception as e:
+        print(f"[AuthDB] 備份 users_seed.json 失敗: {e}")
+
+def restore_users_from_seed():
+    """若資料庫中尚無使用者，嘗試從 users_seed.json 自動還原帳號與密碼"""
+    if not os.path.exists(SEED_PATH):
+        return False
+    try:
+        with open(SEED_PATH, "r", encoding="utf-8") as f:
+            users = json.load(f)
+        if not users or not isinstance(users, list):
+            return False
+        conn = get_connection()
+        cur = conn.cursor()
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        restored_cnt = 0
+        for u in users:
+            uid = u.get("id")
+            if uid:
+                cur.execute("""
+                    INSERT OR IGNORE INTO users (id, username, password_hash, salt, name, role, created_at, last_login)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    uid,
+                    u.get("username"),
+                    u.get("password_hash"),
+                    u.get("salt"),
+                    u.get("name", "管理員"),
+                    u.get("role", "maintainer"),
+                    u.get("created_at", now_str),
+                    u.get("last_login")
+                ))
+            else:
+                cur.execute("""
+                    INSERT OR IGNORE INTO users (username, password_hash, salt, name, role, created_at, last_login)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    u.get("username"),
+                    u.get("password_hash"),
+                    u.get("salt"),
+                    u.get("name", "管理員"),
+                    u.get("role", "maintainer"),
+                    u.get("created_at", now_str),
+                    u.get("last_login")
+                ))
+            if cur.rowcount > 0:
+                restored_cnt += 1
+        conn.commit()
+        conn.close()
+        if restored_cnt > 0:
+            print(f"[AuthDB] 成功從 users_seed.json 還原 {restored_cnt} 位使用者帳號與密碼！")
+            return True
+    except Exception as e:
+        print(f"[AuthDB] 從 users_seed.json 還原使用者失敗: {e}")
+    return False
 
 def init_db():
     conn = get_connection()
@@ -81,27 +151,38 @@ def init_db():
 
     conn.commit()
 
-    # 若無任何使用者，自動初始化預設超級管理員 (admin / admin888)
+    # 若無任何使用者，優先從 users_seed.json 還原；若無種子檔，才初始化預設管理員
     cur.execute("SELECT COUNT(*) FROM users")
     count = cur.fetchone()[0]
     if count == 0:
-        pwd_hash, salt = hash_password("admin888")
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cur.execute("""
-            INSERT INTO users (username, password_hash, salt, name, role, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, ("admin", pwd_hash, salt, "系統管理員", "superadmin", now_str))
-        
-        # 寫入初始化稽核紀錄
-        cur.execute("""
-            INSERT INTO audit_logs (username, action, detail, ip, timestamp)
-            VALUES (?, ?, ?, ?, ?)
-        """, ("system", "init_db", "系統初始化預設超級管理員帳號 (admin)", "127.0.0.1", now_str))
-        
-        conn.commit()
-        print("[AuthDB] 成功初始化 SQLite 資料庫與預設超級管理員 (admin)！")
-
-    conn.close()
+        conn.close()
+        restored = restore_users_from_seed()
+        if not restored:
+            conn = get_connection()
+            cur = conn.cursor()
+            initial_pwd = os.environ.get("ADMIN_PASSWORD") or os.environ.get("ADMIN_INITIAL_PASSWORD") or "admin888"
+            pwd_hash, salt = hash_password(initial_pwd)
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cur.execute("""
+                INSERT INTO users (username, password_hash, salt, name, role, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, ("admin", pwd_hash, salt, "系統管理員", "superadmin", now_str))
+            
+            # 寫入初始化稽核紀錄
+            cur.execute("""
+                INSERT INTO audit_logs (username, action, detail, ip, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+            """, ("system", "init_db", "系統初始化預設超級管理員帳號 (admin)", "127.0.0.1", now_str))
+            
+            conn.commit()
+            conn.close()
+            print("[AuthDB] 成功初始化 SQLite 資料庫與超級管理員 (admin)！")
+            export_users_seed()
+    else:
+        conn.close()
+        # 資料庫已有使用者，確保 users_seed.json 存在且為最新
+        if not os.path.exists(SEED_PATH):
+            export_users_seed()
 
 # --- 驗證與會話 ---
 
@@ -199,6 +280,7 @@ def create_user(username, password, name, role="maintainer"):
         """, (username, pwd_hash, salt, name, role, now_str))
         conn.commit()
         conn.close()
+        export_users_seed()
         return True, "使用者建立成功"
     except sqlite3.IntegrityError:
         conn.close()
@@ -227,6 +309,7 @@ def delete_user(user_id):
     cur.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
+    export_users_seed()
     return True, "使用者已成功刪除"
 
 def change_password(user_id, new_password):
@@ -240,6 +323,7 @@ def change_password(user_id, new_password):
     """, (pwd_hash, salt, user_id))
     conn.commit()
     conn.close()
+    export_users_seed()
     return True, "密碼修改成功"
 
 # --- 稽核日誌 ---

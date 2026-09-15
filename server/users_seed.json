@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "username": "admin",
+    "password_hash": "46c3fac62560a0dc029aa6f5c62a6ed68bb387e89c866e9348a46e368812c25f",
+    "salt": "a1bed82b2ea0ec90d7ecb5022e230c3d",
+    "name": "系統管理員",
+    "role": "superadmin",
+    "created_at": "2026-09-15 08:52:56",
+    "last_login": "2026-09-15 11:18:50"
+  },
+  {
+    "id": 2,
+    "username": "analyst_chen",
+    "password_hash": "2aa7e668ff2c21db978a02f18bd8fab45717dbdea4fc0c6b74f5a19bfcf18ec7",
+    "salt": "1c515485150d12338c653bbaf1e06bb7",
+    "name": "陳分析師",
+    "role": "maintainer",
+    "created_at": "2026-09-15 08:55:55",
+    "last_login": "2026-09-15 08:55:58"
+  },
+  {
+    "id": 3,
+    "username": "temp_maintainer",
+    "password_hash": "dc4489cf2edb64fc741a2e5fff49ce0702c801f21bb544751f58ac99adcf4f93",
+    "salt": "454a9581d50eba657e8a6f4e274f1eb6",
+    "name": "測試維護員",
+    "role": "maintainer",
+    "created_at": "2026-09-15 10:19:00",
+    "last_login": "2026-09-15 10:19:00"
+  }
+]

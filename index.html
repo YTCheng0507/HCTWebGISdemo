@@ -639,7 +639,10 @@
         </div>
         <div>
           <label style="display: block; font-weight: 600; font-size: 13px; margin-bottom: 5px; color: #1e293b;">登入密碼：</label>
-          <input type="password" id="admin-password-input" placeholder="請輸入密碼" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13.5px;" />
+          <div class="pwd-input-container">
+            <input type="password" id="admin-password-input" placeholder="請輸入密碼" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13.5px;" />
+            <button type="button" class="btn-toggle-password" data-target="admin-password-input" title="顯示密碼">👁️</button>
+          </div>
         </div>
         <div id="admin-login-error" style="display: none; color: #dc2626; font-size: 12.5px; background: #fef2f2; border: 1px solid #fecaca; padding: 6px 10px; border-radius: 4px;"></div>
         <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px;">
@@ -899,7 +902,10 @@
               </div>
               <div>
                 <label style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 3px;">初始密碼：</label>
-                <input type="password" id="new-user-password" placeholder="請設定密碼 (至少 4 字元)" style="width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px;" />
+                <div class="pwd-input-container">
+                  <input type="password" id="new-user-password" placeholder="請設定密碼 (至少 4 字元)" style="width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px;" />
+                  <button type="button" class="btn-toggle-password" data-target="new-user-password" title="顯示密碼">👁️</button>
+                </div>
               </div>
               <div>
                 <label style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 3px;">角色權限：</label>
@@ -938,7 +944,10 @@
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; margin-top: 4px;">
             <div style="font-weight: 600; font-size: 13px; color: #1e293b; margin-bottom: 6px;">🔑 修改目前登入密碼</div>
             <div style="display: flex; gap: 8px; align-items: center;">
-              <input type="password" id="input-change-password" placeholder="請輸入新密碼 (至少 4 字元)" style="flex: 1; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px;" />
+              <div class="pwd-input-container" style="flex: 1;">
+                <input type="password" id="input-change-password" placeholder="請輸入新密碼 (至少 4 字元)" style="width: 100%; box-sizing: border-box; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px;" />
+                <button type="button" class="btn-toggle-password" data-target="input-change-password" title="顯示密碼">👁️</button>
+              </div>
               <button id="btn-submit-change-password" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12.5px; border-radius: 4px; cursor: pointer; white-space: nowrap;">確認修改密碼</button>
             </div>
             <span id="change-pwd-status" style="font-size: 12px; display: block; margin-top: 4px;"></span>
