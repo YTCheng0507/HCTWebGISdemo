@@ -116,7 +116,7 @@ class ReportExporter {
       ctx.fillStyle = '#94a3b8';
       ctx.font = '12px "Microsoft JhengHei", sans-serif';
       const nowStr = new Date().toLocaleString('zh-TW', { hour12: false });
-      ctx.fillText(`產製時間：${nowStr}  |  坐標系統：TWD97 / WGS84`, 56, 122);
+      ctx.fillText(`產製時間：${nowStr}`, 56, 122);
 
       // 6. 繪製右上角評估總分卡片
       const score = (data && data.score) || {};
