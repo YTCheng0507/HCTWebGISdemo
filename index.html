@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>人行環境 GIS 資料平台</title>
 
   <!-- MapLibre GL JS -->
@@ -60,6 +60,9 @@
         <option value="yilan" disabled>宜蘭縣 (下週擴充)</option>
         <option value="taitung" disabled>台東縣 (下週擴充)</option>
       </select>
+
+      <!-- 行動端專屬搜尋按鈕 (點擊切換至量測與搜尋分頁) -->
+      <button id="btn-mobile-search-toggle" class="nav-mobile-search-btn" title="搜尋路名與坐標">🔍 搜尋</button>
 
       <!-- 全域關鍵字搜尋 (路名、路口、ID) -->
       <div style="display: flex; gap: 4px;">
@@ -976,6 +979,7 @@
   <script src="src/dashboard.js"></script>
   <script src="src/report_export.js"></script>
   <script src="src/admin.js"></script>
+  <script src="src/mobile_ui.js"></script>
 
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
@@ -1007,6 +1011,26 @@
       window.webgisMap = webgisMap;
       window.layerManager = layerMgr;
       window.adminPanel = new AdminPanel();
+
+      // 9. 初始化行動端響應式 UI 與手勢管理器
+      const mobileUI = new MobileUIManager();
+      window.MobileUI = mobileUI;
+
+      // 行動端快速搜尋按鈕點擊連動
+      const btnMobSearch = document.getElementById('btn-mobile-search-toggle');
+      if (btnMobSearch) {
+        btnMobSearch.addEventListener('click', () => {
+          const tabBtn = document.querySelector('.panel-tab-btn[data-tab="tab-tools"]');
+          if (tabBtn) tabBtn.click();
+          if (window.MobileUI) {
+            window.MobileUI.setSheetState('half');
+          }
+          setTimeout(() => {
+            const input = document.getElementById('tab-search-road-input');
+            if (input) input.focus();
+          }, 350);
+        });
+      }
 
       // --- UI 事件綁定 ---
       // 底圖切換按鈕 (通用電子圖、灰階、正射影像)

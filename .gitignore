@@ -14,3 +14,5 @@ scratch/
 scratch*
 *.pdf
 !docs/*.docx
+docs/~$*
+~$*

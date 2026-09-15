@@ -913,6 +913,16 @@ class LayerManager {
       `;
     }
 
+    // 行動端/觸控裝置優化：取消地圖畫布上的氣泡跳出，由底部抽屜卡片專屬承載，以「不影響圖面操作為最大原則」
+    const isMobile = (window.MobileUI && window.MobileUI.isMobile()) || 
+                     (window.innerWidth <= 820) || 
+                     (window.matchMedia('(pointer: coarse)').matches);
+
+    if (isMobile) {
+      // 行動端不建立地圖氣泡 Pop up，保持圖面 100% 潔淨無遮擋
+      return;
+    }
+
     if (html) {
       this.currentPopup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, offset: 12, maxWidth: '360px' })
         .setLngLat(lngLat)
