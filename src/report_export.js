@@ -150,7 +150,7 @@ class ReportExporter {
 
       // 右上角精緻等級膠囊徽章
       ctx.font = 'bold 12.5px "Microsoft JhengHei", sans-serif';
-      const badgeText = `${level}`;
+      const badgeText = isUnscoreable ? '無道路與人行道資料' : `${level}`;
       const badgeTextW = ctx.measureText(badgeText).width;
       const badgeW = badgeTextW + 20;
       const badgeH = 24;
@@ -195,9 +195,9 @@ class ReportExporter {
       let lineY = cardY + 138;
       const stepY = 32;
 
-      const sWalkText = isUnscoreable ? '-- 分 (無設施)' : `${score.s_walk || 0} 分`;
-      const sLiveText = isUnscoreable ? '-- 分 (無設施)' : `${score.i_live || 0} 分 (POI: ${poi.total_poi || 0}處)`;
-      const sSafetyText = isUnscoreable ? '-- 分 (無通行)' : `${score.s_safety || 0} 分 (近3年A1: ${acc.a1_count || 0}, A2: ${acc.a2_count || 0})`;
+      const sWalkText = isUnscoreable ? '-- 分' : `${score.s_walk || 0} 分`;
+      const sLiveText = isUnscoreable ? '-- 分' : `${score.i_live || 0} 分 (POI: ${poi.total_poi || 0}處)`;
+      const sSafetyText = isUnscoreable ? '-- 分' : `${score.s_safety || 0} 分 (近3年A1: ${acc.a1_count || 0}, A2: ${acc.a2_count || 0})`;
 
       this.drawMetricRow(ctx, cardX + 24, lineY, '🚶 步行環境 (45%):', sWalkText, '#38bdf8', 1);
       lineY += stepY;

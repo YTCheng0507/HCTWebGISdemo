@@ -155,17 +155,21 @@ class WalkAnalysisTool {
 
       if (!resp.ok) {
         const errJson = await resp.json().catch(() => ({}));
-        throw new Error(errJson.error || `伺服器回應狀態碼 ${resp.status}`);
+        throw new Error(errJson.error || errJson.message || `伺服器回應狀態碼 ${resp.status}`);
       }
 
       const result = await resp.json();
+      if (!result.valid) {
+        throw new Error(result.error || result.message || '分析失敗');
+      }
+
       result.geometry = geometry;
       window.lastAnalysisGeometry = geometry;
       console.log('[WalkAnalysis] 生活圈分析計算成功！', result);
       window.dispatchEvent(new CustomEvent('analysis-complete', { detail: result }));
     } catch (err) {
-      console.error('[WalkAnalysis] 生活圈分析請求失敗:', err);
-      alert(`生活圈空間分析運算失敗: ${err.message}`);
+      console.warn('[WalkAnalysis] 生活圈分析中斷:', err.message);
+      alert(err.message);
       window.dispatchEvent(new CustomEvent('analysis-error', { detail: err }));
     }
   }

@@ -459,6 +459,37 @@ def perform_spatial_analysis(county, polygon_geom_wgs84):
     box_area_m2 = poly_twd97.area
     box_area_km2 = box_area_m2 / 1_000_000.0
     
+    # -------------------------------------------------------------
+    # 0. 前置道路與人行道檢核：範圍內無道路與人行道資料，則不予分析
+    # -------------------------------------------------------------
+    has_road_or_sidewalk = False
+    
+    # 檢查 12公尺以上道路路網
+    if 'road_priority' in data:
+        rp_gdf = data['road_priority']
+        possible_idx = list(rp_gdf.sindex.intersection(poly_wgs84.bounds))
+        if possible_idx:
+            possible_matches = rp_gdf.iloc[possible_idx]
+            if not possible_matches[possible_matches.intersects(poly_wgs84)].empty:
+                has_road_or_sidewalk = True
+                
+    # 檢查實體人行道圖資
+    if not has_road_or_sidewalk and 'sidewalk' in data:
+        sw_gdf = data['sidewalk']
+        possible_idx = list(sw_gdf.sindex.intersection(poly_wgs84.bounds))
+        if possible_idx:
+            possible_matches = sw_gdf.iloc[possible_idx]
+            if not possible_matches[possible_matches.intersects(poly_wgs84)].empty:
+                has_road_or_sidewalk = True
+                
+    if not has_road_or_sidewalk:
+        return {
+            "valid": False,
+            "has_roads": False,
+            "error": "範圍內無道路與人行道資料，不予分析",
+            "message": "範圍內無道路與人行道資料，不予分析"
+        }
+
     result = {
         "box_area_m2": round(box_area_m2, 1),
         "box_area_km2": round(box_area_km2, 4),
@@ -466,7 +497,9 @@ def perform_spatial_analysis(county, polygon_geom_wgs84):
         "accidents": {},
         "sidewalk": {},
         "poi": {},
-        "score": {}
+        "score": {},
+        "valid": True,
+        "has_roads": True
     }
     
     # -------------------------------------------------------------
@@ -899,6 +932,9 @@ class WebGISRequestHandler(SimpleHTTPRequestHandler):
                     self._send_json({"error": "Missing polygon geometry"}, status=400)
                     return
                 analysis_res = perform_spatial_analysis(county, polygon)
+                if not analysis_res.get("valid", True):
+                    self._send_json(analysis_res, status=400)
+                    return
                 self._send_json(analysis_res)
             except Exception as e:
                 import traceback

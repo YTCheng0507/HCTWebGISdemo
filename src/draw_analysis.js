@@ -388,17 +388,21 @@ class DrawAnalysisTool {
 
       if (!resp.ok) {
         const errJson = await resp.json().catch(() => ({}));
-        throw new Error(errJson.error || `伺服器回應狀態碼 ${resp.status}`);
+        throw new Error(errJson.error || errJson.message || `伺服器回應狀態碼 ${resp.status}`);
       }
 
       const result = await resp.json();
+      if (!result.valid) {
+        throw new Error(result.error || result.message || '分析失敗');
+      }
+
       result.geometry = geometry;
       window.lastAnalysisGeometry = geometry;
       console.log('[DrawAnalysis] 空間分析計算成功！結果:', result);
       window.dispatchEvent(new CustomEvent('analysis-complete', { detail: result }));
     } catch (err) {
-      console.error('[DrawAnalysis] 空間分析請求失敗:', err);
-      alert(`空間分析運算失敗: ${err.message}`);
+      console.warn('[DrawAnalysis] 空間分析中止:', err.message);
+      alert(err.message);
       window.dispatchEvent(new CustomEvent('analysis-error', { detail: err }));
     }
   }

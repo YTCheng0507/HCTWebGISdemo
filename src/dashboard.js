@@ -28,6 +28,10 @@ class DashboardManager {
       this.renderAnalysisResult(e.detail);
     });
 
+    window.addEventListener('analysis-error', () => {
+      this.closeDrawer();
+    });
+
     const closeBtn = document.getElementById('drawer-close-btn');
     if (closeBtn) {
       const handleClose = (e) => {
@@ -310,10 +314,10 @@ class DashboardManager {
 
     const unscoreableNotice = isUnscoreable ? `
       <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 12px 14px; margin-top: 12px; font-size: 13px; color: #9a3412; line-height: 1.5; display: flex; align-items: flex-start; gap: 8px;">
-        <span style="font-size: 18px; line-height: 1;">🌊</span>
+        <span style="font-size: 18px; line-height: 1;">⚠️</span>
         <div>
-          <div style="font-weight: bold; margin-bottom: 2px;">非有效人行評估空間（水域或無人行設施區域）</div>
-          <div>${score.unscoreable_reason || '所選範圍內查無道路路網、實體人行道或生活機能設施（如湖面水域、河川行水區或山林未開闢區），不具備人本步行評鑑條件，系統不發放基礎分。'}</div>
+          <div style="font-weight: bold; margin-bottom: 2px;">範圍內無道路與人行道資料，不予分析</div>
+          <div>${score.unscoreable_reason || '所選範圍內查無道路與人行道資料，不予分析。請重新框選包含道路的區域。'}</div>
         </div>
       </div>
     ` : '';
