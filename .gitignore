@@ -12,5 +12,5 @@ public/data/kaohsiung/sidewalk.geojson
 # 暫存與說明書檔案
 scratch/
 scratch*
-*.docx
 *.pdf
+!docs/*.docx
