@@ -157,16 +157,48 @@ class DashboardManager {
         <tr><th>騎樓平整度 (AC_EVEN)</th><td>${properties.AC_EVEN || '-'}</td></tr>
       `;
     } else if (layerId === 'layer-road-priority') {
-      title = `道路評估: ${properties.ROADNAME_F || '路廊'}`;
+      title = `道路步行環境: ${properties.ROADNAME_F || '路廊'}`;
+      const iTotal = parseFloat(properties.I_TOTAL) || 0;
+      const walkScore = Math.max(0, Math.min(100, Math.round((100 - iTotal) * 10) / 10));
+      let gradeText = 'E級 (亟待改善)';
+      let gradeColor = '#dc2626';
+      let gradeBg = '#fee2e2';
+
+      if (walkScore >= 80) {
+        gradeText = 'A級 (優良環境)';
+        gradeColor = '#16a34a';
+        gradeBg = '#dcfce7';
+      } else if (walkScore >= 65) {
+        gradeText = 'B級 (良好通行)';
+        gradeColor = '#0d9488';
+        gradeBg = '#ccfbf1';
+      } else if (walkScore >= 50) {
+        gradeText = 'C級 (普通環境)';
+        gradeColor = '#d97706';
+        gradeBg = '#fef3c7';
+      } else if (walkScore >= 35) {
+        gradeText = 'D級 (待改善)';
+        gradeColor = '#ea580c';
+        gradeBg = '#ffedd5';
+      }
+
       rowsHtml = `
-        <tr><th>道路名稱</th><td>${properties.ROADNAME_F || '-'}</td></tr>
+        <tr><th>道路名稱</th><td><strong>${properties.ROADNAME_F || '-'}</strong></td></tr>
         <tr><th>行政區</th><td>${properties.TOWNNAME || '-'}</td></tr>
         <tr><th>路段總長</th><td>${properties.LENGTH || '-'} m</td></tr>
         <tr><th>路面寬度</th><td>${properties.WIDTH || '-'} m</td></tr>
-        <tr><th>評估總分</th><td><strong style="color: #2563eb; font-size: 16px;">${properties.I_TOTAL || '-'} 分</strong></td></tr>
-        <tr><th>優先級別</th><td>${properties.PRIORITY || '-'} (全縣市第 ${properties.RANK || '-'} 名)</td></tr>
-        <tr><th>人行道品質分</th><td>${properties.I_SIDEWALK || '-'} 分</td></tr>
-        <tr><th>事故風險分</th><td>${properties.I_ACCIDENT || '-'} 分 (A1: ${properties.CNT_A1 || 0}, A2: ${properties.CNT_A2 || 0})</td></tr>
+        <tr><th>步行良好度評分</th><td>
+          <strong style="color: ${gradeColor}; font-size: 18px; font-weight: 800;">${walkScore}</strong>
+          <span style="color: #64748b; font-size: 12px;"> / 100 分</span>
+        </td></tr>
+        <tr><th>步行環境品質</th><td>
+          <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-weight: bold; font-size: 12px; color: ${gradeColor}; background: ${gradeBg}; border: 1px solid ${gradeColor}40;">
+            ${gradeText}
+          </span>
+        </td></tr>
+        <tr style="border-top: 1px dashed #cbd5e1;"><th style="color: #64748b;">工務改善優先度</th><td style="color: #475569;">${properties.PRIORITY || '-'} (全市第 ${properties.RANK || '-'} 名)</td></tr>
+        <tr><th style="color: #64748b;">工務急迫扣分</th><td style="color: #475569;">${properties.I_TOTAL || '-'} 分 (人行道扣分: ${properties.I_SIDEWALK || '-'}, 事故扣分: ${properties.I_ACCIDENT || '-'})</td></tr>
+        <tr><th>歷年事故統計</th><td>A1 (死亡): ${properties.CNT_A1 || 0} 件, A2 (受傷): ${properties.CNT_A2 || 0} 件</td></tr>
       `;
     } else if (layerId === 'layer-accidents' || layerId === 'analysis-highlight-accidents') {
       title = `交通事故 (${properties.ACC_TYPE || '事故'})`;

@@ -931,12 +931,49 @@ class LayerManager {
         </div>
       `;
     } else if (layerId === 'layer-road-priority') {
+      const iTotal = parseFloat(props.I_TOTAL) || 0;
+      const walkScore = Math.max(0, Math.min(100, Math.round((100 - iTotal) * 10) / 10));
+      let gradeText = 'E級 (亟待改善)';
+      let gradeColor = '#dc2626';
+      let gradeBg = '#fee2e2';
+
+      if (walkScore >= 80) {
+        gradeText = 'A級 (優良環境)';
+        gradeColor = '#16a34a';
+        gradeBg = '#dcfce7';
+      } else if (walkScore >= 65) {
+        gradeText = 'B級 (良好通行)';
+        gradeColor = '#0d9488';
+        gradeBg = '#ccfbf1';
+      } else if (walkScore >= 50) {
+        gradeText = 'C級 (普通環境)';
+        gradeColor = '#d97706';
+        gradeBg = '#fef3c7';
+      } else if (walkScore >= 35) {
+        gradeText = 'D級 (待改善)';
+        gradeColor = '#ea580c';
+        gradeBg = '#ffedd5';
+      }
+
       html = `
         <div style="font-size: 14px; min-width: 280px; line-height: 1.6;">
-          <div style="font-weight: bold; color: #1e293b; font-size: 15px; margin-bottom: 4px;">12公尺以上道路人本交通環境評估</div>
-          <div>路廊路段: <strong>${props.ROADNAME_F || '未命名'}</strong></div>
-          <div>環境評估分: <strong style="color: #e74c3c;">${props.I_TOTAL || 0} 分</strong></div>
-          <div style="white-space: nowrap;">評估優先度: <strong>${props.PRIORITY || '-'}</strong> <span style="color: #475569; font-size: 13px;">(第 ${props.RANK || '-'} 名)</span></div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+            <span style="font-weight: bold; color: #1e293b; font-size: 15px;">12M+ 道路步行環境</span>
+            <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 12px; font-weight: bold; color: ${gradeColor}; background: ${gradeBg}; border: 1px solid ${gradeColor}40;">
+              ${gradeText}
+            </span>
+          </div>
+          <div style="margin-bottom: 4px;">路廊路段: <strong style="font-size: 15px; color: #0f172a;">${props.ROADNAME_F || '未命名'}</strong></div>
+          <div style="margin-bottom: 6px; display: flex; align-items: baseline; gap: 6px;">
+            <span style="color: #475569;">步行良好度評分:</span>
+            <strong style="color: ${gradeColor}; font-size: 20px; font-weight: 800;">${walkScore}</strong>
+            <span style="color: #64748b; font-size: 13px;">/ 100 分</span>
+          </div>
+          <div style="background: #f8fafc; border-radius: 6px; padding: 6px 8px; margin-top: 4px; font-size: 12px; color: #64748b; border: 1px solid #e2e8f0;">
+            <div style="color: #475569; font-weight: 600; margin-bottom: 2px;">工務工程參考：</div>
+            <div>改善急迫優先度: <strong style="color: #334155;">${props.PRIORITY || '-'}</strong> (全市第 ${props.RANK || '-'} 名)</div>
+            <div>急迫度扣分指標: <strong>${props.I_TOTAL || 0}</strong> 分</div>
+          </div>
         </div>
       `;
     }
