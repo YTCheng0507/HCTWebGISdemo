@@ -390,11 +390,14 @@ def load_county_data(county="kaohsiung"):
     
     data = {}
     
-    # 1. 道路優先度 / 人行道圖資
+    # 1. 道路圖資：依整條道路匯總 (展示與點選 Popup) 及 依細部切割路段 (框選空間分析)
     rp_path = os.path.join(county_dir, "road_priority.geojson")
     if os.path.exists(rp_path):
-        gdf = gpd.read_file(rp_path)
-        data['road_priority'] = gdf
+        data['road_priority'] = gpd.read_file(rp_path)
+
+    r_seg_path = os.path.join(county_dir, "road_segments.geojson")
+    if os.path.exists(r_seg_path):
+        data['road_segments'] = gpd.read_file(r_seg_path)
     
     # 2. 人行道 (若只有 .gz 壓縮檔則自動解壓縮以符合 GitHub <100MB 規範)
     sw_path = os.path.join(county_dir, "sidewalk.geojson")
@@ -464,12 +467,12 @@ def perform_spatial_analysis(county, polygon_geom_wgs84):
     # -------------------------------------------------------------
     has_road_or_sidewalk = False
     
-    # 檢查 12公尺以上道路路網
-    if 'road_priority' in data:
-        rp_gdf = data['road_priority']
-        possible_idx = list(rp_gdf.sindex.intersection(poly_wgs84.bounds))
+    # 檢查 12公尺以上道路路網 (優先採用細部切割路段)
+    road_gdf = data.get('road_segments') if 'road_segments' in data else data.get('road_priority')
+    if road_gdf is not None:
+        possible_idx = list(road_gdf.sindex.intersection(poly_wgs84.bounds))
         if possible_idx:
-            possible_matches = rp_gdf.iloc[possible_idx]
+            possible_matches = road_gdf.iloc[possible_idx]
             if not possible_matches[possible_matches.intersects(poly_wgs84)].empty:
                 has_road_or_sidewalk = True
                 
@@ -713,10 +716,11 @@ def perform_spatial_analysis(county, polygon_geom_wgs84):
     total_clipped_len = 0.0
     road_contributions = []
     
-    if 'road_priority' in data:
-        rp_gdf = data['road_priority']
-        possible_idx = list(rp_gdf.sindex.intersection(poly_wgs84.bounds))
-        possible_matches = rp_gdf.iloc[possible_idx]
+    # 空間框選計算：優先採用【依細部切割路段 (road_segments)】，確保局部小範圍評分最精準公正
+    calc_road_gdf = data.get('road_segments') if 'road_segments' in data else data.get('road_priority')
+    if calc_road_gdf is not None:
+        possible_idx = list(calc_road_gdf.sindex.intersection(poly_wgs84.bounds))
+        possible_matches = calc_road_gdf.iloc[possible_idx]
         in_rp = possible_matches[possible_matches.intersects(poly_wgs84)]
         
         for _, r_row in in_rp.iterrows():
@@ -726,11 +730,8 @@ def perform_spatial_analysis(county, polygon_geom_wgs84):
                 r_twd97 = to_twd97(r_inter)
                 c_len = r_twd97.length
                 raw_s = float(r_row.get('I_SIDEWALK', 50.0))
-                # 若包含正面評估版欄位或圖資，直接取正面得分；若為舊版急迫度則反轉
-                if 'BASE_SCORE' in r_row or raw_s < 99.0:
-                    pos_walk = max(0.0, min(100.0, raw_s))
-                else:
-                    pos_walk = max(0.0, min(100.0, 100.0 - raw_s))
+                # 細部路段圖資已直接具備正面品質評分 (0~100 分)
+                pos_walk = max(0.0, min(100.0, raw_s))
                 road_contributions.append((c_len, pos_walk))
                 total_clipped_len += c_len
 
