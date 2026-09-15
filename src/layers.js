@@ -904,17 +904,17 @@ class LayerManager {
       `;
     } else if (layerId === 'layer-road-priority') {
       html = `
-        <div style="font-size: 14px; min-width: 240px; line-height: 1.6;">
-          <div style="font-weight: bold; color: #1e293b; font-size: 15px;">12公尺以上道路人本交通環境評估</div>
+        <div style="font-size: 14px; min-width: 280px; line-height: 1.6;">
+          <div style="font-weight: bold; color: #1e293b; font-size: 15px; margin-bottom: 4px;">12公尺以上道路人本交通環境評估</div>
           <div>路廊路段: <strong>${props.ROADNAME_F || '未命名'}</strong></div>
           <div>環境評估分: <strong style="color: #e74c3c;">${props.I_TOTAL || 0} 分</strong></div>
-          <div>評估優先度: ${props.PRIORITY || '-'} (第 ${props.RANK || '-'} 名)</div>
+          <div style="white-space: nowrap;">評估優先度: <strong>${props.PRIORITY || '-'}</strong> <span style="color: #475569; font-size: 13px;">(第 ${props.RANK || '-'} 名)</span></div>
         </div>
       `;
     }
 
     if (html) {
-      this.currentPopup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, offset: 12 })
+      this.currentPopup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, offset: 12, maxWidth: '360px' })
         .setLngLat(lngLat)
         .setHTML(html)
         .addTo(this.map);
