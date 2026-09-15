@@ -530,79 +530,90 @@
           </div>
         </div>
 
-        <!-- 分頁 4：評估方法與說明 (對接人行道改善優先度 2.0 V2 與五級分級標準) -->
+        <!-- 分頁 4：評估方法與說明 (對接人行道改善優先度 2.0 正面評估版 V2) -->
         <div id="tab-method" class="tab-pane">
           <div style="font-size: 13px; color: #475569; line-height: 1.6;">
-            本平台依據國土管理署<strong>《人行道改善優先度評估 2.0 (V2)》</strong>模型架構演繹，從工務施工優先度轉化為決策者與市民看得懂的<strong>「正面人本步行環境優良度總分」</strong>（滿分 100 分，越高越優良）：
+            本平台嚴格依據<strong>《人行道改善優先度評估 2.0 正面評估版 (V2)》</strong>標準作業規範，呈現民眾視角的<strong>「正面步行環境優良度總分」</strong>（滿分 100 分，分數愈高愈友善好走）：
           </div>
 
+          <!-- 1. 步行環境品質指數 (S_WALK) -->
           <div class="method-card">
             <div class="method-card-title">
-              <span>🚶 1. 步行環境品質指數 (S_WALK)</span>
-              <span style="color: #2563eb; font-size: 12px; font-weight: 700;">權重 45% (可動態微調)</span>
+              <span>🚶 1. 步行環境品質指數 (S_WALK / I_sidewalk)</span>
+              <span style="color: #2563eb; font-size: 12px; font-weight: 700;">權重 45%</span>
             </div>
-            <div style="font-size: 12px; color: #475569; line-height: 1.6;">
-              <strong>國土署正面評估版 2.0 (V2) 核心架構：</strong>將分析圈內各路段與人行道實體普查相交，以各路段在圈內之<strong>長度佔比加權平均</strong>。各路段人行道指標 (I_sidewalk) 依正面評估版 V2 規範，<strong>兼顧正向加分與負向扣分</strong>綜合評定：
+            <div style="font-size: 12px; color: #475569; line-height: 1.6; margin-bottom: 6px;">
+              <strong>計算公式：</strong>雙側人行道基礎分 ＋ 好品質加分項 － 壞品質減分項（介於 0 ~ 100 分）
             </div>
 
-            <!-- 正向加分與負向扣分雙欄對比表 -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; font-size: 11.5px;">
-              <!-- 加分項 -->
-              <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 8px 10px;">
-                <div style="font-weight: 700; color: #166534; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
-                  <span>➕ 正向加分項目 (友善步行品質)</span>
+            <!-- 單側基礎分標準 -->
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 10px; margin-bottom: 8px; font-size: 11.5px;">
+              <div style="font-weight: 700; color: #1e293b; margin-bottom: 3px;">兩側人行道單側基礎分（兩側合計滿分 80 分）：</div>
+              <ul style="margin: 0; padding-left: 16px; color: #475569; line-height: 1.5;">
+                <li><strong>未設置人行道</strong>：給定 20 分（雙側皆無為 40 分基準分）</li>
+                <li><strong>設置但淨寬不足 1.5m</strong>：20 ＋ (10 × 覆蓋率) 分</li>
+                <li><strong>設置且淨寬合規 (≥ 1.5m)</strong>：30 ＋ (10 × 覆蓋率) 分</li>
+              </ul>
+            </div>
+
+            <!-- 好品質加分與不良扣分雙欄對比表 -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; font-size: 11px;">
+              <!-- 加分項 (上限 +20 分) -->
+              <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 8px;">
+                <div style="font-weight: 700; color: #166534; margin-bottom: 4px;">
+                  ➕ 好品質加分項 (上限 +20 分)
                 </div>
-                <ul style="margin: 0; padding-left: 16px; color: #15803d; line-height: 1.55;">
-                  <li><strong>充足通行淨寬</strong>：有效淨寬 ≥ 1.5m 基礎合規，≥ 2.0m 寬裕加分</li>
-                  <li><strong>無障礙通行友善</strong>：設有無障礙斜坡道 (SW_RAMP) 與順平銜接</li>
-                  <li><strong>連續綠化與遮蔭</strong>：配置連續綠帶植栽與行道樹 (SW_TREE)，兼具降溫與人車安全緩衝</li>
-                  <li><strong>公共設施帶收整</strong>：具備獨立設施帶 (SWD_WTH)，將箱桿燈號集中收納以維持純淨人行空間</li>
-                  <li><strong>騎樓平整與貫通</strong>：騎樓無高低落差整平 (AC_EVEN)，提供遮陽擋雨庇護</li>
+                <ul style="margin: 0; padding-left: 14px; color: #15803d; line-height: 1.55;">
+                  <li><strong>行道樹實質遮蔭 (最高8分)</strong>：<br/>1~3株/100m (+2分)、4~7株 (+4分)、8~12株 (+6分)、>12株 (+8分)</li>
+                  <li><strong>連續騎樓空間 (最高4分)</strong>：<br/>有騎樓但未平整 (+2分)、有騎樓且平整順暢 (+4分)</li>
+                  <li><strong>自行車通行設施 (最高4分)</strong>：<br/>人車共道/代碼5 (+2分)、獨立自行車專用道/代碼4 (+4分)</li>
+                  <li><strong>導盲無障礙鋪面 (最高4分)</strong>：<br/>鋪面含有導盲磚引導設施 (+4分)</li>
                 </ul>
               </div>
 
-              <!-- 扣分項 -->
-              <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 8px 10px;">
-                <div style="font-weight: 700; color: #991b1b; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
-                  <span>➖ 負向扣分項目 (通行阻礙與劣化)</span>
+              <!-- 扣分項 (上限 -20 分) -->
+              <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 8px;">
+                <div style="font-weight: 700; color: #991b1b; margin-bottom: 4px;">
+                  ➖ 不良品質扣分項 (上限 -20 分)
                 </div>
-                <ul style="margin: 0; padding-left: 16px; color: #b91c1c; line-height: 1.55;">
-                  <li><strong>有效淨寬不足</strong>：淨寬 &lt; 1.5m（尤其 &lt; 0.9m 輪椅無法通過者加重扣分）</li>
-                  <li><strong>鋪面老化破損</strong>：鋪面破損率高 (SW_BRKRAT)、地磚嚴重鬆動或龜裂 (SW_BK_B/L)</li>
-                  <li><strong>固定路障占用</strong>：變電箱、電線桿、告示牌或私設斜坡侵入通行淨寬</li>
-                  <li><strong>路網中斷斷點</strong>：人行道未連續銜接、局部缺口中斷導致人車交織爭道</li>
+                <ul style="margin: 0; padding-left: 14px; color: #b91c1c; line-height: 1.55;">
+                  <li><strong>鋪面破損率 (0/2/4分)</strong>：<br/>0% (0分)、0~5% (-2分)、>5% (-4分)</li>
+                  <li><strong>箱類/電箱占用 (0/2/4分)</strong>：<br/>0處 (0分)、≤2處/100m (-2分)、>2處 (-4分)</li>
+                  <li><strong>桿類占用 (0/2/4分)</strong>：<br/>0處 (0分)、≤10處/100m (-2分)、>10處 (-4分)</li>
+                  <li><strong>汽機車進出斜坡 (0/2/4分)</strong>：<br/>0處 (0分)、≤2處/100m (-2分)、>2處 (-4分)</li>
+                  <li><strong>人行道無障礙斜坡 (0/2/4分)</strong>：<br/>≥2處 (0分)、僅1處 (-2分)、0處 (-4分)</li>
                 </ul>
               </div>
             </div>
 
             <div class="method-formula">
-              公式：S_WALK = ∑ [ (路段裁切長度 ÷ 總路長) × 路段正面評估分 (100 - I_sidewalk) ]
+              公式：S_WALK = 雙側基礎分 ＋ 好品質加分項 － 不良扣分項
             </div>
           </div>
 
           <div class="method-card">
             <div class="method-card-title">
               <span>🏪 2. 生活圈需求強度 (I_LIVE)</span>
-              <span style="color: #10b981; font-size: 12px; font-weight: 700;">權重 45% (可動態微調)</span>
+              <span style="color: #10b981; font-size: 12px; font-weight: 700;">權重 45%</span>
             </div>
             <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
-              <strong>生活機能與人流密度：</strong>結合最小統計區<strong>常住人口密度</strong>（佔 30%）與臺灣通用電子地圖<strong>七大類生活機能設施 POI 多樣性與密集度</strong>（佔 70%）。生活機能越密集，步行需求越迫切。
+              <strong>生活機能與人流密度：</strong>結合最小統計區<strong>常住人口</strong>（佔 20%）與臺灣通用電子地圖<strong>七大類生活機能設施 POI</strong>（佔 80%）。
             </div>
             <div class="method-formula">
-              公式：0.30 × 人口密度得分 + 0.70 × 常態 POI 易達性得分
+              公式：I_liveability ＝ 0.20 × 服務人口分數 (S_pop) ＋ 0.80 × POI服務點位分數 (S_poi)
             </div>
           </div>
 
           <div class="method-card">
             <div class="method-card-title">
               <span>🛡️ 3. 行人交通安全指數 (S_SAFETY)</span>
-              <span style="color: #ef4444; font-size: 12px; font-weight: 700;">權重 10% (可動態微調)</span>
+              <span style="color: #ef4444; font-size: 12px; font-weight: 700;">權重 10%</span>
             </div>
             <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
-              <strong>安全是回家的路：</strong>基礎滿分 100 分。精確統計近三年行人涉入之事故：每件 A1 死亡事故扣減 20 分、A2 受傷事故扣減 10 分。零事故區域享有滿分安全評定。
+              <strong>基準安全評價：</strong>以 100 分為完全零死傷之最安全基準。近三年市區道路行人涉入事故點位：每件 A1 死亡事故扣減 10 分、每件 A2 受傷事故扣減 5 分（死亡懲罰為受傷的 2 倍），充足容納市區事故黑點。
             </div>
             <div class="method-formula">
-              公式：100 分 - (近三年 A1 件數 × 20 + A2 件數 × 10)，扣至 0 分為止
+              公式：S_safety ＝ Max(0.0, 100.0 － (近三年 A1 件數 × 10.0 ＋ A2 件數 × 5.0))
             </div>
           </div>
 

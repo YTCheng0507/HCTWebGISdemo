@@ -931,8 +931,10 @@ class LayerManager {
         </div>
       `;
     } else if (layerId === 'layer-road-priority') {
-      const iTotal = parseFloat(props.I_TOTAL) || 0;
-      const walkScore = Math.max(0, Math.min(100, Math.round((100 - iTotal) * 10) / 10));
+      const walkScore = (props.I_SIDEWALK !== undefined && props.I_SIDEWALK !== null && !isNaN(parseFloat(props.I_SIDEWALK)))
+        ? Math.round(parseFloat(props.I_SIDEWALK) * 10) / 10
+        : Math.max(0, Math.min(100, Math.round((100 - (parseFloat(props.I_TOTAL) || 0)) * 10) / 10));
+
       let gradeText = 'E級 (亟待改善)';
       let gradeColor = '#dc2626';
       let gradeBg = '#fee2e2';
@@ -955,6 +957,8 @@ class LayerManager {
         gradeBg = '#ffedd5';
       }
 
+      const hasDetails = (props.BASE_SCORE !== undefined && props.BASE_SCORE !== null);
+
       html = `
         <div style="font-size: 14px; min-width: 280px; line-height: 1.6;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
@@ -965,15 +969,24 @@ class LayerManager {
           </div>
           <div style="margin-bottom: 4px;">路廊路段: <strong style="font-size: 15px; color: #0f172a;">${props.ROADNAME_F || '未命名'}</strong></div>
           <div style="margin-bottom: 6px; display: flex; align-items: baseline; gap: 6px;">
-            <span style="color: #475569;">步行良好度評分:</span>
+            <span style="color: #475569;">步行環境品質評分:</span>
             <strong style="color: ${gradeColor}; font-size: 20px; font-weight: 800;">${walkScore}</strong>
             <span style="color: #64748b; font-size: 13px;">/ 100 分</span>
           </div>
-          <div style="background: #f8fafc; border-radius: 6px; padding: 6px 8px; margin-top: 4px; font-size: 12px; color: #64748b; border: 1px solid #e2e8f0;">
-            <div style="color: #475569; font-weight: 600; margin-bottom: 2px;">工務工程參考：</div>
-            <div>改善急迫優先度: <strong style="color: #334155;">${props.PRIORITY || '-'}</strong> (全市第 ${props.RANK || '-'} 名)</div>
-            <div>急迫度扣分指標: <strong>${props.I_TOTAL || 0}</strong> 分</div>
+          ${hasDetails ? `
+          <div style="background: #f8fafc; border-radius: 6px; padding: 6px 8px; margin-top: 4px; font-size: 12px; color: #475569; border: 1px solid #e2e8f0;">
+            <div style="font-weight: 600; margin-bottom: 2px; color: #1e293b;">評分結構明細：</div>
+            <div style="display: flex; justify-content: space-between;">
+              <span>雙側基礎分: <strong>${props.BASE_SCORE || 0}</strong> 分</span>
+              <span style="color: #16a34a;">加分: <strong>+${props.TOTAL_BON || 0}</strong></span>
+              <span style="color: #dc2626;">扣分: <strong>-${props.TOTAL_DED || 0}</strong></span>
+            </div>
           </div>
+          ` : `
+          <div style="background: #f8fafc; border-radius: 6px; padding: 6px 8px; margin-top: 4px; font-size: 12px; color: #64748b; border: 1px solid #e2e8f0;">
+            <div>工務參考等級: <strong style="color: #334155;">${props.PRIORITY || '-'}</strong> (全市第 ${props.RANK || '-'} 名)</div>
+          </div>
+          `}
         </div>
       `;
     }

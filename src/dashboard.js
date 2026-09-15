@@ -162,8 +162,10 @@ class DashboardManager {
       `;
     } else if (layerId === 'layer-road-priority') {
       title = `道路步行環境: ${properties.ROADNAME_F || '路廊'}`;
-      const iTotal = parseFloat(properties.I_TOTAL) || 0;
-      const walkScore = Math.max(0, Math.min(100, Math.round((100 - iTotal) * 10) / 10));
+      const walkScore = (properties.I_SIDEWALK !== undefined && properties.I_SIDEWALK !== null && !isNaN(parseFloat(properties.I_SIDEWALK)))
+        ? Math.round(parseFloat(properties.I_SIDEWALK) * 10) / 10
+        : Math.max(0, Math.min(100, Math.round((100 - (parseFloat(properties.I_TOTAL) || 0)) * 10) / 10));
+
       let gradeText = 'E級 (亟待改善)';
       let gradeColor = '#dc2626';
       let gradeBg = '#fee2e2';
@@ -186,22 +188,28 @@ class DashboardManager {
         gradeBg = '#ffedd5';
       }
 
+      const hasDetails = (properties.BASE_SCORE !== undefined && properties.BASE_SCORE !== null);
+
       rowsHtml = `
         <tr><th>道路名稱</th><td><strong>${properties.ROADNAME_F || '-'}</strong></td></tr>
         <tr><th>行政區</th><td>${properties.TOWNNAME || '-'}</td></tr>
         <tr><th>路段總長</th><td>${properties.LENGTH || '-'} m</td></tr>
         <tr><th>路面寬度</th><td>${properties.WIDTH || '-'} m</td></tr>
-        <tr><th>步行良好度評分</th><td>
+        <tr><th>步行環境品質評分</th><td>
           <strong style="color: ${gradeColor}; font-size: 18px; font-weight: 800;">${walkScore}</strong>
           <span style="color: #64748b; font-size: 12px;"> / 100 分</span>
         </td></tr>
-        <tr><th>步行環境品質</th><td>
+        <tr><th>環境品質等級</th><td>
           <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-weight: bold; font-size: 12px; color: ${gradeColor}; background: ${gradeBg}; border: 1px solid ${gradeColor}40;">
             ${gradeText}
           </span>
         </td></tr>
-        <tr style="border-top: 1px dashed #cbd5e1;"><th style="color: #64748b;">工務改善優先度</th><td style="color: #475569;">${properties.PRIORITY || '-'} (全市第 ${properties.RANK || '-'} 名)</td></tr>
-        <tr><th style="color: #64748b;">工務急迫扣分</th><td style="color: #475569;">${properties.I_TOTAL || '-'} 分 (人行道扣分: ${properties.I_SIDEWALK || '-'}, 事故扣分: ${properties.I_ACCIDENT || '-'})</td></tr>
+        ${hasDetails ? `
+        <tr><th>雙側基礎分</th><td><strong>${properties.BASE_SCORE || 0}</strong> 分 (雙側滿分 80)</td></tr>
+        <tr><th>好品質加分項</th><td style="color: #16a34a;"><strong>+${properties.TOTAL_BON || 0}</strong> 分 (樹木/騎樓/自行車/導盲磚)</td></tr>
+        <tr><th>不良扣分項</th><td style="color: #dc2626;"><strong>-${properties.TOTAL_DED || 0}</strong> 分 (破損/電箱/桿件/車輛斜坡/無障礙)</td></tr>
+        ` : ''}
+        <tr style="border-top: 1px dashed #cbd5e1;"><th style="color: #64748b;">工務改善參考</th><td style="color: #475569;">${properties.PRIORITY || '-'} (全市第 ${properties.RANK || '-'} 名)</td></tr>
         <tr><th>歷年事故統計</th><td>A1 (死亡): ${properties.CNT_A1 || 0} 件, A2 (受傷): ${properties.CNT_A2 || 0} 件</td></tr>
       `;
     } else if (layerId === 'layer-accidents' || layerId === 'analysis-highlight-accidents') {
@@ -657,25 +665,13 @@ class DashboardManager {
 
     const option = {
       tooltip: { trigger: 'item', formatter: '{b}: <strong>{c} 處</strong> ({d}%)' },
-      legend: {
-        orient: 'vertical',
-        right: '2%',
-        top: 'middle',
-        itemWidth: 10,
-        itemHeight: 10,
-        textStyle: { fontSize: 11, color: '#334155' },
-        formatter: (name) => {
-          const item = data.find(d => d.name === name);
-          const val = item ? item.value : 0;
-          return `${name} (${val}處)`;
-        }
-      },
+      legend: { show: false },
       series: [
         {
           name: '七大分類',
           type: 'pie',
           radius: ['45%', '72%'],
-          center: ['28%', '50%'],
+          center: ['50%', '50%'],
           avoidLabelOverlap: false,
           label: {
             show: false
@@ -685,7 +681,7 @@ class DashboardManager {
               show: true,
               fontSize: 13,
               fontWeight: 'bold',
-              formatter: '{b}\n{c} 處'
+              formatter: '{b}\n{c} 處 ({d}%)'
             }
           },
           data: data.length > 0 ? data : [{ value: 0, name: '無設施' }]
@@ -693,8 +689,8 @@ class DashboardManager {
       ],
       graphic: [{
         type: 'text',
-        left: '24%',
-        top: '46%',
+        left: 'center',
+        top: 'middle',
         style: {
           text: `設施共\n${totalCount} 處`,
           textAlign: 'center',

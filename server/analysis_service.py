@@ -725,8 +725,12 @@ def perform_spatial_analysis(county, polygon_geom_wgs84):
             if not r_inter.is_empty:
                 r_twd97 = to_twd97(r_inter)
                 c_len = r_twd97.length
-                neg_s = float(r_row.get('I_SIDEWALK', 50.0))
-                pos_walk = max(0.0, min(100.0, 100.0 - neg_s))
+                raw_s = float(r_row.get('I_SIDEWALK', 50.0))
+                # 若包含正面評估版欄位或圖資，直接取正面得分；若為舊版急迫度則反轉
+                if 'BASE_SCORE' in r_row or raw_s < 99.0:
+                    pos_walk = max(0.0, min(100.0, raw_s))
+                else:
+                    pos_walk = max(0.0, min(100.0, 100.0 - raw_s))
                 road_contributions.append((c_len, pos_walk))
                 total_clipped_len += c_len
 
@@ -768,15 +772,15 @@ def perform_spatial_analysis(county, polygon_geom_wgs84):
     else:
         weighted_walk_score = 0.0
 
-    # (2) 交通安全指數 S_SAFETY (10%): 零事故滿分 100 分，行人涉入事故依嚴重度扣減
-    acc_penalty = (tot_a1 * 20.0) + (tot_a2 * 10.0)
+    # (2) 交通安全指數 S_SAFETY (10%): 依《正面評估版 V2》官方規定，A1 扣 10 分、A2 扣 5 分
+    acc_penalty = (tot_a1 * 10.0) + (tot_a2 * 5.0)
     s_safety = max(0.0, min(100.0, 100.0 - acc_penalty))
     
-    # (3) 生活機能綜合指標 I_LIVE (45%): 0.3 * 服務人口 + 0.7 * 常態POI豐富度 (排除稀有特例)
+    # (3) 生活機能綜合指標 I_LIVE (45%): 依正面評估版 V2 規定，0.20 * 服務人口 + 0.80 * POI
     density = result["population"].get("density_per_km2", 0)
     pop_score = min(100.0, (density / 12000.0) * 100.0)
     poi_score = min(100.0, (scoreable_poi_cnt / 40.0) * 100.0)
-    i_live = round(0.30 * pop_score + 0.70 * poi_score, 1)
+    i_live = round(0.20 * pop_score + 0.80 * poi_score, 1)
     
     # (4) 人本步行環境評估總分 (滿分100，越高越優良，支援管理員動態調權)
     w_walk = EVAL_CONFIG.get("weight_walk", 0.45)
