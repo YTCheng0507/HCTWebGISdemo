@@ -37,6 +37,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import shape, Polygon, MultiPolygon
+from shapely.ops import transform
 import pyproj
 
 # 引入本機認證與 SQLite 模組
@@ -92,7 +93,7 @@ def load_county_data(county="kaohsiung"):
         import gzip, shutil
         with gzip.open(gz_path, 'rb') as f_in, open(sw_path, 'wb') as f_out:
             shutil.copyfileobj(f_in, f_out)
-        print("[✓] 人行道圖資解壓縮完成！")
+        print("[OK] 人行道圖資解壓縮完成！")
 
     if os.path.exists(sw_path):
         gdf = gpd.read_file(sw_path)

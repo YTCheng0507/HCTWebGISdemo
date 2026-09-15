@@ -387,7 +387,8 @@ class DrawAnalysisTool {
       });
 
       if (!resp.ok) {
-        throw new Error(`伺服器錯誤 HTTP ${resp.status}`);
+        const errJson = await resp.json().catch(() => ({}));
+        throw new Error(errJson.error || `伺服器回應狀態碼 ${resp.status}`);
       }
 
       const result = await resp.json();

@@ -510,70 +510,77 @@
           </div>
         </div>
 
-        <!-- 分頁 4：評估方法與說明 (民眾看得懂的生動說明) -->
+        <!-- 分頁 4：評估方法與說明 (對接人行道改善優先度 2.0 V2 與五級分級標準) -->
         <div id="tab-method" class="tab-pane">
           <div style="font-size: 13px; color: #475569; line-height: 1.6;">
-            本平台依據客觀科學指標，評估特定街區的<strong>步行友善程度</strong>。總分滿分 100 分，由四大維度加權合成：
+            本平台依據國土管理署<strong>《人行道改善優先度評估 2.0 (V2)》</strong>模型架構演繹，從工務施工優先度轉化為決策者與市民看得懂的<strong>「正面人本步行環境優良度總分」</strong>（滿分 100 分，越高越優良）：
           </div>
 
           <div class="method-card">
             <div class="method-card-title">
-              <span>🚶 1. 人行道淨寬合規性</span>
-              <span style="color: #2563eb; font-size: 12px;">權重 40% (40分)</span>
+              <span>🚶 1. 步行環境品質指數 (S_WALK)</span>
+              <span style="color: #2563eb; font-size: 12px; font-weight: 700;">權重 45% (可動態微調)</span>
             </div>
             <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
-              <strong>走得舒適、推車無阻：</strong>國家標準規定人行道淨寬應 <strong>≥ 1.5 公尺</strong>，才足供輪椅與嬰兒車雙向順暢通行。淨寬合格比例越高，得分越高。
+              <strong>路網長度加權實測：</strong>將分析圈內各路段與人行道實體普查相交，以各路段在圈內之<strong>長度佔比加權平均</strong>。全面考量步道覆蓋、無障礙淨寬（≥1.5m 門檻）與路面破損占用扣分。
             </div>
             <div class="method-formula">
-              公式：(淨寬 ≥ 1.5m 之人行道長度 ÷ 人行道總長度) × 40 分
-            </div>
-          </div>
-
-          <div class="method-card">
-            <div class="method-card-title">
-              <span>🛣️ 2. 人行道覆蓋普及率</span>
-              <span style="color: #2563eb; font-size: 12px;">權重 25% (25分)</span>
-            </div>
-            <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
-              <strong>出門有路走、不與車爭道：</strong>評估主要道路兩側是否普遍設有人行道。兩側都有人行道的道路越多，行人越能安全穿梭各路口。
-            </div>
-            <div class="method-formula">
-              公式：(人行道總長度 ÷ 道路中心線長度) × 12.5 分 (最高25分)
+              公式：∑ (路段裁切長度 ÷ 總路長) × (100 - 人行道缺失指數 I_sidewalk)
             </div>
           </div>
 
           <div class="method-card">
             <div class="method-card-title">
-              <span>🏪 3. 生活機能豐富度 (POI)</span>
-              <span style="color: #2563eb; font-size: 12px;">權重 20% (20分)</span>
+              <span>🏪 2. 生活圈需求強度 (I_LIVE)</span>
+              <span style="color: #10b981; font-size: 12px; font-weight: 700;">權重 45% (可動態微調)</span>
             </div>
             <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
-              <strong>機能近在咫尺：</strong>散步 5~10 分鐘內是否有超商、診所藥局、學校、公園、公車站、捷運站與派出所。設施種類越多越便利，得分越高。
+              <strong>生活機能與人流密度：</strong>結合最小統計區<strong>常住人口密度</strong>（佔 30%）與臺灣通用電子地圖<strong>七大類生活機能設施 POI 多樣性與密集度</strong>（佔 70%）。生活機能越密集，步行需求越迫切。
             </div>
             <div class="method-formula">
-              依通用電子地圖七大生活設施類型多樣性與密集度評分 (最高20分)
+              公式：0.30 × 人口密度得分 + 0.70 × 常態 POI 易達性得分
             </div>
           </div>
 
           <div class="method-card">
             <div class="method-card-title">
-              <span>🛡️ 4. 行人交通安全風險</span>
-              <span style="color: #2563eb; font-size: 12px;">權重 15% (15分)</span>
+              <span>🛡️ 3. 行人交通安全指數 (S_SAFETY)</span>
+              <span style="color: #ef4444; font-size: 12px; font-weight: 700;">權重 10% (可動態微調)</span>
             </div>
             <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
-              <strong>安全是回家唯一的路：</strong>統計近三年重大交通事故（A1 死亡 / A2 受傷）。若未曾發生事故則維持滿分 15 分，事故越多則適度扣減。
+              <strong>安全是回家的路：</strong>基礎滿分 100 分。精確統計近三年行人涉入之事故：每件 A1 死亡事故扣減 20 分、A2 受傷事故扣減 10 分。零事故區域享有滿分安全評定。
             </div>
             <div class="method-formula">
-              公式：基礎分 15 分 - (A1死亡×3分 + A2受傷×0.5分)，扣完為止
+              公式：100 分 - (近三年 A1 件數 × 20 + A2 件數 × 10)，扣至 0 分為止
             </div>
           </div>
 
-          <div class="method-card" style="background: #f8fafc;">
-            <div style="font-weight: 700; font-size: 13px; color: #1e293b; margin-bottom: 6px;">綜合評鑑等級標準</div>
-            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
-              <div>🟢 <strong>80 分以上 (優良)</strong>：人本交通典範，步道寬敞且安全。</div>
-              <div>🟡 <strong>60 ~ 79 分 (普通)</strong>：生活機能良好，部分路段淨寬需拓寬。</div>
-              <div>🔴 <strong>未達 60 分 (待加強)</strong>：缺乏連續步道，建議優先爭取工程改善。</div>
+          <div class="method-card" style="background: #f8fafc; border: 1px solid #cbd5e1;">
+            <div style="font-weight: 700; font-size: 13px; color: #0f172a; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+              <span>🏆 五級綜合評鑑等級標準</span>
+              <span style="font-size: 11px; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px;">量化決策分級</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
+              <div style="padding: 4px 6px; background: rgba(34, 197, 94, 0.08); border-radius: 4px;">
+                🟢 <strong>A 級 (80 ~ 100 分，優良步行環境)</strong><br/>
+                <span style="color: #475569;">人本交通典範，步道連續寬敞（有效淨寬 ≥ 1.5m）、生活機能便利且無重大交通事故。</span>
+              </div>
+              <div style="padding: 4px 6px; background: rgba(74, 222, 128, 0.08); border-radius: 4px;">
+                🟢 <strong>B 級 (65 ~ 79.9 分，良好通行環境)</strong><br/>
+                <span style="color: #475569;">整體通行順暢，具備基本人行道系統與生活設施，僅少數路口或局部街廓存在微調空間。</span>
+              </div>
+              <div style="padding: 4px 6px; background: rgba(234, 179, 8, 0.08); border-radius: 4px;">
+                🟡 <strong>C 級 (50 ~ 64.9 分，普通環境，局部缺口)</strong><br/>
+                <span style="color: #475569;">具備基本人行設施，但部分路段淨寬未達標（&lt; 1.5m）或有中斷缺口，存在明顯改善潛力。</span>
+              </div>
+              <div style="padding: 4px 6px; background: rgba(249, 115, 22, 0.08); border-radius: 4px;">
+                🟠 <strong>D 級 (35 ~ 49.9 分，待改善環境)</strong><br/>
+                <span style="color: #475569;">步道連續性不足、有效通行淨寬狹窄或行人事故密集，建議工務交通單位列入中短期改善名單。</span>
+              </div>
+              <div style="padding: 4px 6px; background: rgba(239, 68, 68, 0.08); border-radius: 4px;">
+                🔴 <strong>E 級 (未達 35 分，亟待大幅改善)</strong><br/>
+                <span style="color: #475569;">嚴重缺乏實體人行空間，人車爭道風險極高，建議優先提報爭取中央/市府人本交通專案補助。</span>
+              </div>
             </div>
           </div>
         </div>
