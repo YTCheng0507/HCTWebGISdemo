@@ -676,9 +676,9 @@ def perform_spatial_analysis(county, polygon_geom_wgs84):
     # TOTAL_SC = 0.45 * S_WALK + 0.10 * S_SAFETY + 0.45 * I_LIVE
     # 分數越高代表步行環境優良度越高 (0 ~ 100 分)
     # -------------------------------------------------------------
-    # (1) 步行環境分數 S_WALK (45%): 依路段在框內之【長度佔比權重】加權平均
-    weighted_walk_score = 40.0 # 基準無路段保底40分
+    sw_len = result["sidewalk"].get("total_length_m", 0.0)
     total_clipped_len = 0.0
+    road_contributions = []
     
     if 'road_priority' in data:
         rp_gdf = data['road_priority']
@@ -686,7 +686,6 @@ def perform_spatial_analysis(county, polygon_geom_wgs84):
         possible_matches = rp_gdf.iloc[possible_idx]
         in_rp = possible_matches[possible_matches.intersects(poly_wgs84)]
         
-        road_contributions = []
         for _, r_row in in_rp.iterrows():
             r_geom = r_row.geometry
             r_inter = r_geom.intersection(poly_wgs84)
@@ -697,19 +696,46 @@ def perform_spatial_analysis(county, polygon_geom_wgs84):
                 pos_walk = max(0.0, min(100.0, 100.0 - neg_s))
                 road_contributions.append((c_len, pos_walk))
                 total_clipped_len += c_len
-                
-        if total_clipped_len > 0:
-            weighted_walk_score = sum((c_len / total_clipped_len) * score for c_len, score in road_contributions)
-    else:
-        sw_len = result["sidewalk"].get("total_length_m", 0)
-        insuf_len = result["sidewalk"].get("insufficient_width_m", 0)
-        cov_rate = min(1.0, sw_len / (box_area_m2 / 150.0)) if box_area_m2 > 0 else 0.5
-        insuf_ratio = (insuf_len / sw_len) if sw_len > 0 else 0.5
-        weighted_walk_score = 20.0 + (10.0 * cov_rate) + (50.0 * (1.0 - insuf_ratio))
 
-    # (2) 交通安全指數 S_SAFETY (10%): 零事故滿分 100 分，行人涉入事故依嚴重度扣減
+    # 事故與設施統計
     tot_a1 = result["accidents"].get("total_a1", 0)
     tot_a2 = result["accidents"].get("total_a2", 0)
+    tot_acc = result["accidents"].get("total_count", 0)
+
+    # 核心防呆檢核：判定是否為「非人行評估範圍 / 水域或無設施未開闢區」
+    # 判定準則：所選區域無 12m 優先道路、無實體人行道、無生活機能 POI、且無交通事故紀錄
+    is_non_walkable_zone = (total_clipped_len == 0 and sw_len == 0 and scoreable_poi_cnt == 0 and tot_acc == 0)
+
+    if is_non_walkable_zone:
+        # 完全無人行設施與活動（如湖泊水域、河川行水區或山林未開發地），不予核發基礎分數
+        result["score"] = {
+            "total_score": 0.0,
+            "s_walk": 0.0,
+            "s_safety": 0.0,
+            "i_live": 0.0,
+            "env_level": "不適用 (非人行評估範圍)",
+            "is_evaluable": False,
+            "unscoreable_reason": "範圍內查無道路路網、實體人行道及生活機能設施（如湖面水域或未開闢荒地），不具備人行通行評鑑條件，不予核發基礎分數。",
+            "total_road_length_m": 0.0
+        }
+        return result
+
+    # (1) 步行環境分數 S_WALK (45%):
+    if total_clipped_len > 0:
+        weighted_walk_score = sum((c_len / total_clipped_len) * score for c_len, score in road_contributions)
+    elif sw_len > 0:
+        # 無 12m 道路但有實體人行道 (依人行道覆蓋率與淨寬合格率計算)
+        cov_rate = min(1.0, sw_len / (box_area_m2 / 150.0)) if box_area_m2 > 0 else 0.5
+        insuf_len = result["sidewalk"].get("insufficient_width_m", 0)
+        insuf_ratio = (insuf_len / sw_len) if sw_len > 0 else 0.0
+        weighted_walk_score = round(20.0 + (30.0 * cov_rate) + (50.0 * (1.0 - insuf_ratio)), 1)
+    elif scoreable_poi_cnt > 0 or tot_acc > 0:
+        # 市區巷道但無實體人行道 (車行混合環境，反映欠缺人行道現況)
+        weighted_walk_score = 15.0
+    else:
+        weighted_walk_score = 0.0
+
+    # (2) 交通安全指數 S_SAFETY (10%): 零事故滿分 100 分，行人涉入事故依嚴重度扣減
     acc_penalty = (tot_a1 * 20.0) + (tot_a2 * 10.0)
     s_safety = max(0.0, min(100.0, 100.0 - acc_penalty))
     
@@ -743,6 +769,7 @@ def perform_spatial_analysis(county, polygon_geom_wgs84):
         "s_safety": round(s_safety, 1),
         "i_live": round(i_live, 1),
         "env_level": env_level,
+        "is_evaluable": True,
         "total_road_length_m": round(total_clipped_len, 1)
     }
     

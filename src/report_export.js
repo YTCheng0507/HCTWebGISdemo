@@ -129,9 +129,14 @@ class ReportExporter {
 
       // 頂部列：左側標題，右側等級評定膠囊徽章
       const level = score.env_level || '評估完成';
+      const isUnscoreable = score.is_evaluable === false || level.includes('不適用');
+
       let badgeColor = '#4ade80';
       let badgeBg = 'rgba(74, 222, 128, 0.16)';
-      if (level.includes('D') || level.includes('E')) {
+      if (isUnscoreable) {
+        badgeColor = '#94a3b8';
+        badgeBg = 'rgba(148, 163, 184, 0.20)';
+      } else if (level.includes('D') || level.includes('E')) {
         badgeColor = '#f87171';
         badgeBg = 'rgba(248, 113, 113, 0.18)';
       } else if (level.includes('C')) {
@@ -163,15 +168,15 @@ class ReportExporter {
       ctx.textAlign = 'left';
 
       // 第二列：超大評分數字 + 自動動態間距的 / 100 分 (永不重疊)
-      const totalScore = score.total_score !== undefined ? score.total_score : '--';
-      ctx.fillStyle = '#38bdf8';
+      const totalScore = isUnscoreable ? '--' : (score.total_score !== undefined ? score.total_score : '--');
+      ctx.fillStyle = isUnscoreable ? '#94a3b8' : '#38bdf8';
       ctx.font = 'bold 42px "Microsoft JhengHei", sans-serif';
       ctx.fillText(`${totalScore}`, cardX + 24, cardY + 90);
 
       const scoreW = ctx.measureText(`${totalScore}`).width;
       ctx.fillStyle = '#64748b';
       ctx.font = '16px "Microsoft JhengHei", sans-serif';
-      ctx.fillText('/ 100 分', cardX + 24 + scoreW + 8, cardY + 90);
+      ctx.fillText(isUnscoreable ? '(不適用)' : '/ 100 分', cardX + 24 + scoreW + 8, cardY + 90);
 
       // 分隔線
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
@@ -190,15 +195,19 @@ class ReportExporter {
       let lineY = cardY + 138;
       const stepY = 32;
 
-      this.drawMetricRow(ctx, cardX + 24, lineY, '🚶 步行環境 (45%):', `${score.s_walk || 0} 分`, '#38bdf8', 1);
+      const sWalkText = isUnscoreable ? '-- 分 (無設施)' : `${score.s_walk || 0} 分`;
+      const sLiveText = isUnscoreable ? '-- 分 (無設施)' : `${score.i_live || 0} 分 (POI: ${poi.total_poi || 0}處)`;
+      const sSafetyText = isUnscoreable ? '-- 分 (無通行)' : `${score.s_safety || 0} 分 (近3年A1: ${acc.a1_count || 0}, A2: ${acc.a2_count || 0})`;
+
+      this.drawMetricRow(ctx, cardX + 24, lineY, '🚶 步行環境 (45%):', sWalkText, '#38bdf8', 1);
       lineY += stepY;
       this.drawMetricRow(ctx, cardX + 24, lineY, '   • 人行道總長:', `${(sw.total_length_m || 0).toLocaleString()} m`, '#e2e8f0', 1);
       lineY += stepY;
       this.drawMetricRow(ctx, cardX + 24, lineY, '   • 平均有效淨寬:', `${sw.avg_effective_width_m || 0} m`, sw.avg_effective_width_m >= 1.5 ? '#4ade80' : '#f87171', 1);
       lineY += stepY;
-      this.drawMetricRow(ctx, cardX + 24, lineY, '🏪 生活機能 (45%):', `${score.i_live || 0} 分 (POI: ${poi.total_poi || 0}處)`, '#86efac', 1);
+      this.drawMetricRow(ctx, cardX + 24, lineY, '🏪 生活機能 (45%):', sLiveText, '#86efac', 1);
       lineY += stepY;
-      this.drawMetricRow(ctx, cardX + 24, lineY, '🛡️ 交通安全 (10%):', `${score.s_safety || 0} 分 (近3年A1: ${acc.a1_count || 0}, A2: ${acc.a2_count || 0})`, '#fca5a5', 1);
+      this.drawMetricRow(ctx, cardX + 24, lineY, '🛡️ 交通安全 (10%):', sSafetyText, '#fca5a5', 1);
       lineY += stepY;
       this.drawMetricRow(ctx, cardX + 24, lineY, '👥 涵蓋推估人口:', `${(pop.total_population || 0).toLocaleString()} 人 (${(pop.density_per_km2 || 0).toLocaleString()} 人/km²)`, '#cbd5e1', 1);
 

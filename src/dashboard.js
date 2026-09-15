@@ -281,6 +281,8 @@ class DashboardManager {
     const acc = data.accidents || {};
     const poi = data.poi || {};
 
+    const isUnscoreable = score.is_evaluable === false || (score.env_level && score.env_level.includes('不適用'));
+
     const levelColors = {
       "A級": "badge-low",    // 優良 (綠)
       "B級": "badge-mid",    // 良好 (青綠/黃)
@@ -289,7 +291,7 @@ class DashboardManager {
       "E級": "badge-urgent"  // 亟需改善 (紅)
     };
     const prefix = (score.env_level || "").substring(0, 2);
-    const badgeClass = levelColors[prefix] || "badge-mid";
+    const badgeClass = isUnscoreable ? "badge-neutral" : (levelColors[prefix] || "badge-mid");
 
     // 計算合規長度與佔比
     const totalSwLen = sw.total_length_m || 0;
@@ -300,6 +302,25 @@ class DashboardManager {
     // POI 分類資料整理
     const poiCats = poi.categories || {};
     const totalPoi = poi.total_count || 0;
+
+    const scoreNumDisplay = isUnscoreable ? '--' : (score.total_score !== undefined ? score.total_score : 0);
+    const scoreNumColor = isUnscoreable ? '#94a3b8' : '#38bdf8';
+    const scoreUnitDisplay = isUnscoreable ? '<span style="font-size: 14px; font-weight: normal; color: #94a3b8;">/ 100 分 (不適用)</span>' : '<span style="font-size: 15px; font-weight: normal; color: #94a3b8;">/ 100 分</span>';
+    const badgeStyle = isUnscoreable ? 'background: #475569; color: #f8fafc; border: 1px solid #64748b;' : '';
+
+    const unscoreableNotice = isUnscoreable ? `
+      <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 12px 14px; margin-top: 12px; font-size: 13px; color: #9a3412; line-height: 1.5; display: flex; align-items: flex-start; gap: 8px;">
+        <span style="font-size: 18px; line-height: 1;">🌊</span>
+        <div>
+          <div style="font-weight: bold; margin-bottom: 2px;">非有效人行評估空間（水域或無人行設施區域）</div>
+          <div>${score.unscoreable_reason || '所選範圍內查無道路路網、實體人行道或生活機能設施（如湖面水域、河川行水區或山林未開闢區），不具備人本步行評鑑條件，系統不發放基礎分。'}</div>
+        </div>
+      </div>
+    ` : '';
+
+    const sWalkDisplay = isUnscoreable ? '--' : `${score.s_walk || 0} 分`;
+    const sSafetyDisplay = isUnscoreable ? '--' : `${score.s_safety || 0} 分`;
+    const sLiveDisplay = isUnscoreable ? '--' : `${score.i_live || 0} 分`;
 
     this.drawerContent.innerHTML = `
       <!-- 分頁 1：📌 綜合總覽 -->
@@ -313,23 +334,25 @@ class DashboardManager {
         <div class="score-banner" style="background: linear-gradient(135deg, #0f172a, #1e293b); padding: 18px; border-radius: 10px; border: 1px solid #334155; box-shadow: 0 4px 14px rgba(0,0,0,0.25);">
           <div>
             <div style="font-size: 13px; color: #94a3b8; font-weight: 600;">人本步行環境優良度總分</div>
-            <div class="score-num" style="color: #38bdf8; font-size: 38px; font-weight: 800; line-height: 1.1; margin: 4px 0;">
-              ${score.total_score || 0} <span style="font-size: 15px; font-weight: normal; color: #94a3b8;">/ 100 分</span>
+            <div class="score-num" style="color: ${scoreNumColor}; font-size: 38px; font-weight: 800; line-height: 1.1; margin: 4px 0;">
+              ${scoreNumDisplay} ${scoreUnitDisplay}
             </div>
-            <span class="score-badge ${badgeClass}" style="font-size: 13px; padding: 4px 12px; font-weight: bold;">${score.env_level || '評估完成'}</span>
+            <span class="score-badge ${badgeClass}" style="font-size: 13px; padding: 4px 12px; font-weight: bold; ${badgeStyle}">${score.env_level || '評估完成'}</span>
           </div>
           <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; text-align: right; justify-content: center;">
             <div style="background: rgba(56, 189, 248, 0.12); padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.25);">
-              <span style="color: #cbd5e1;">🚶 步行環境 (45%):</span> <strong style="color: #38bdf8; font-size: 14px; margin-left: 4px;">${score.s_walk || 0} 分</strong>
+              <span style="color: #cbd5e1;">🚶 步行環境 (45%):</span> <strong style="color: #38bdf8; font-size: 14px; margin-left: 4px;">${sWalkDisplay}</strong>
             </div>
             <div style="background: rgba(244, 63, 94, 0.12); padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(244, 63, 94, 0.25);">
-              <span style="color: #cbd5e1;">🛡️ 交通安全 (10%):</span> <strong style="color: #fb7185; font-size: 14px; margin-left: 4px;">${score.s_safety || 0} 分</strong>
+              <span style="color: #cbd5e1;">🛡️ 交通安全 (10%):</span> <strong style="color: #fb7185; font-size: 14px; margin-left: 4px;">${sSafetyDisplay}</strong>
             </div>
             <div style="background: rgba(34, 197, 94, 0.12); padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(34, 197, 94, 0.25);">
-              <span style="color: #cbd5e1;">🏪 生活機能 (45%):</span> <strong style="color: #4ade80; font-size: 14px; margin-left: 4px;">${score.i_live || 0} 分</strong>
+              <span style="color: #cbd5e1;">🏪 生活機能 (45%):</span> <strong style="color: #4ade80; font-size: 14px; margin-left: 4px;">${sLiveDisplay}</strong>
             </div>
           </div>
         </div>
+
+        ${unscoreableNotice}
 
         <!-- 區域空間與人口環境核心卡片 -->
         <div class="section-title">區域空間與人口環境 (面積比例分攤)</div>
