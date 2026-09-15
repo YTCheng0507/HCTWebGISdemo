@@ -34,9 +34,14 @@ if "PROJ_DATA" not in os.environ and os.path.exists(r"C:\Program Files\QGIS 4.2.
     os.environ["PROJ_LIB"] = r"C:\Program Files\QGIS 4.2.2\share\proj"
 
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+import io
+import zipfile
+import tempfile
+import email
+from email import policy
 import geopandas as gpd
 import pandas as pd
-from shapely.geometry import shape, Polygon, MultiPolygon
+from shapely.geometry import shape, Point, Polygon, MultiPolygon
 from shapely.ops import transform
 import pyproj
 
@@ -59,6 +64,312 @@ EVAL_CONFIG = {
 }
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin888")
+
+# ==============================================================================
+# 【圖資規格標準與欄位規範定義表 (LAYER_SCHEMAS)】
+# 定義 7 大圖資的幾何類型要求、核心必備欄位 (缺少則紅字警告且阻擋匯入) 與別名
+# ==============================================================================
+LAYER_SCHEMAS = {
+    "sidewalk": {
+        "name": "人行步道圖資",
+        "target_file": "sidewalk.geojson",
+        "geom_types": ["Polygon", "MultiPolygon", "LineString", "MultiLineString"],
+        "required_fields": {
+            "SWW_WTH": {"name": "人行道淨寬 (m)", "reason": "國土署 2.0 V2 核心幾何指標，計算淨寬不足長度與達標率", "aliases": ["sww_wth", "width", "net_width"]},
+            "SW_AREA": {"name": "鋪面面積 (m²)", "reason": "幾何與鋪面損壞比率計算分母", "aliases": ["sw_area", "area"]},
+            "SW_BRKRAT": {"name": "鋪面破損率 (%)", "reason": "人行道鋪面平整度狀況評分", "aliases": ["sw_brkrat", "break_ratio", "damage_rate"]},
+            "SW_BK_B": {"name": "磚體鬆動B指標", "reason": "鋪面平整度扣分指標", "aliases": ["sw_bk_b", "flatness_b"]},
+            "SW_BK_L": {"name": "磚體鬆動L指標", "reason": "鋪面平整度扣分指標", "aliases": ["sw_bk_l", "flatness_l"]}
+        },
+        "optional_fields": {
+            "NAME": {"name": "路名/人行道名稱", "aliases": ["name", "road_name", "roadname"]},
+            "I_SIDEWALK": {"name": "預計算人行道指標", "aliases": ["i_sidewalk"]}
+        }
+    },
+    "accidents": {
+        "name": "交通事故統計",
+        "target_file": "accidents.geojson",
+        "geom_types": ["Point", "MultiPoint"],
+        "required_fields": {
+            "ACC_TYPE": {"name": "事故型態 (A1/A2)", "reason": "行人死傷安全指數評定核心依據", "aliases": ["acc_type", "type", "severity"]},
+            "YEAR": {"name": "事故年度", "reason": "篩選近三年事故統計", "aliases": ["year", "acc_year"]},
+            "DEAD_CNT": {"name": "死亡人數", "reason": "A1 死亡事故扣分計量", "aliases": ["dead_cnt", "death_cnt", "killed"]},
+            "INJ_CNT": {"name": "受傷人數", "reason": "A2 受傷事故扣分計量", "aliases": ["inj_cnt", "injury_cnt", "injured"]}
+        },
+        "optional_fields": {
+            "LOCATION": {"name": "事故地點", "aliases": ["location", "address"]}
+        }
+    },
+    "poi": {
+        "name": "生活機能設施 POI",
+        "target_file": "poi.geojson",
+        "geom_types": ["Point", "MultiPoint"],
+        "required_fields": {
+            "POI_NAME": {"name": "設施名稱", "reason": "地標識別與彈窗顯示", "aliases": ["poi_name", "name", "facility_name"]},
+            "TYPE": {"name": "設施主分類 (學校/醫療/交通等)", "reason": "生活圈機能 8 大類別加權計算依據", "aliases": ["type", "main_class", "category"]},
+            "IS_SCOREABLE": {"name": "計入評分標記 (0/1)", "reason": "標記是否納入生活圈評分計算", "aliases": ["is_scoreable", "scoreable"]}
+        },
+        "optional_fields": {
+            "SUB_CLASS": {"name": "設施次分類", "aliases": ["sub_class", "subcategory"]},
+            "SOURCE": {"name": "資料來源", "aliases": ["source"]},
+            "TOWNNAME": {"name": "所屬行政區", "aliases": ["townname", "town"]}
+        }
+    },
+    "population_bsa": {
+        "name": "最小統計區人口統計",
+        "target_file": "population_bsa.geojson",
+        "geom_types": ["Polygon", "MultiPolygon"],
+        "required_fields": {
+            "P_CNT": {"name": "常住人口數", "reason": "生活圈常住人口與密度計算", "aliases": ["p_cnt", "population", "pop"]},
+            "H_CNT": {"name": "戶數", "reason": "統計區基本戶籍資料", "aliases": ["h_cnt", "households"]},
+            "CODEBASE": {"name": "最小統計區代碼", "reason": "空間單元唯一碼", "aliases": ["codebase", "code2", "code"]}
+        },
+        "optional_fields": {
+            "TOWN": {"name": "鄉鎮市區名", "aliases": ["town", "townname"]},
+            "ORIG_AREA": {"name": "原始統計區面積", "aliases": ["orig_area", "area"]}
+        }
+    },
+    "road_priority": {
+        "name": "優先改善路段圖資",
+        "target_file": "road_priority.geojson",
+        "geom_types": ["LineString", "MultiLineString"],
+        "required_fields": {
+            "ROADNAME_F": {"name": "道路名稱", "reason": "道路路網查詢與辨識", "aliases": ["roadname_f", "road_name", "roadname", "name"]},
+            "I_TOTAL": {"name": "綜合優先度分數", "reason": "改善優先順序排序與分級", "aliases": ["i_total", "priority", "score_total", "total_score"]}
+        },
+        "optional_fields": {
+            "LENGTH": {"name": "道路長度 (m)", "aliases": ["length"]},
+            "PRIORITY": {"name": "優先等級", "aliases": ["priority", "rank"]}
+        }
+    },
+    "town_boundary": {
+        "name": "行政區界線",
+        "target_file": "town_boundary.geojson",
+        "geom_types": ["Polygon", "MultiPolygon"],
+        "required_fields": {
+            "TOWNNAME": {"name": "行政區名", "reason": "區界標示與快速定位", "aliases": ["townname", "town", "name"]},
+            "COUNTYNAME": {"name": "所屬縣市", "reason": "縣市歸屬過濾", "aliases": ["countyname", "county"]}
+        },
+        "optional_fields": {
+            "TOWNCODE": {"name": "行政區代碼", "aliases": ["towncode", "code"]}
+        }
+    },
+    "village_boundary": {
+        "name": "村里界線",
+        "target_file": "village_boundary.geojson",
+        "geom_types": ["Polygon", "MultiPolygon"],
+        "required_fields": {
+            "VILLNAME": {"name": "村里名", "reason": "村里標示與里民定位", "aliases": ["villname", "village", "name"]},
+            "TOWNNAME": {"name": "所屬行政區名", "reason": "所屬鄉鎮區域名稱", "aliases": ["townname", "town"]}
+        },
+        "optional_fields": {
+            "COUNTYNAME": {"name": "所屬縣市", "aliases": ["countyname", "county"]},
+            "VILLCODE": {"name": "村里代碼", "aliases": ["villcode", "code"]}
+        }
+    }
+}
+
+def _parse_multipart_form(headers, raw_body):
+    """解析 multipart/form-data 表單傳輸，回傳 (fields_dict, files_dict)"""
+    content_type = headers.get('Content-Type', '')
+    if not content_type or 'multipart/form-data' not in content_type:
+        return {}, {}
+    msg_bytes = f"Content-Type: {content_type}\r\n\r\n".encode('utf-8') + raw_body
+    msg = email.message_from_bytes(msg_bytes, policy=policy.default)
+    fields = {}
+    files = {}
+    for part in msg.iter_parts():
+        name = part.get_param('name', header='content-disposition')
+        filename = part.get_filename()
+        payload = part.get_payload(decode=True)
+        if filename:
+            files[name or 'file'] = {
+                'filename': filename,
+                'content': payload,
+                'content_type': part.get_content_type()
+            }
+        elif name:
+            try:
+                fields[name] = payload.decode('utf-8')
+            except Exception:
+                fields[name] = str(payload)
+    return fields, files
+
+def _extract_gdf_from_upload(content_bytes, filename=""):
+    """
+    從上傳內容 (ZIP 包含 SHP, 或 GeoJSON) 讀取並自動轉換為 WGS84 EPSG:4326 之 GeoDataFrame
+    """
+    is_zip = (filename.lower().endswith('.zip') or content_bytes[:4] == b'PK\x03\x04')
+    original_crs_desc = "未知"
+    
+    if is_zip:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with zipfile.ZipFile(io.BytesIO(content_bytes), 'r') as zf:
+                zf.extractall(tmpdir)
+            
+            shp_files = []
+            for root, _, f_list in os.walk(tmpdir):
+                for f in f_list:
+                    if f.lower().endswith('.shp'):
+                        shp_files.append(os.path.join(root, f))
+            
+            if not shp_files:
+                raise ValueError("ZIP 壓縮檔內找不到 .shp 檔案！請確認已包含成套 Shapefile (.shp, .shx, .dbf, .prj 等檔案)。")
+            
+            target_shp = shp_files[0]
+            # 優先嘗試 UTF-8，若遇中文編碼問題則自動 fallback 至 Big5 (CP950)
+            try:
+                gdf = gpd.read_file(target_shp, encoding='utf-8')
+            except Exception:
+                gdf = gpd.read_file(target_shp, encoding='cp950')
+    else:
+        # GeoJSON 格式處理
+        try:
+            geojson_text = content_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            geojson_text = content_bytes.decode('cp950')
+        
+        data = json.loads(geojson_text)
+        features = data.get('features', []) if isinstance(data, dict) else []
+        if not features:
+            raise ValueError("GeoJSON 格式錯誤或無任何圖徵 (features 為空)！")
+        
+        with tempfile.NamedTemporaryFile(suffix='.geojson', delete=False, mode='w', encoding='utf-8') as tf:
+            json.dump(data, tf, ensure_ascii=False)
+            tmp_path = tf.name
+        try:
+            gdf = gpd.read_file(tmp_path)
+        finally:
+            if os.path.exists(tmp_path):
+                try: os.remove(tmp_path)
+                except Exception: pass
+
+    # 坐標系統 (CRS) 自動識別與轉投影至標準 WGS84 EPSG:4326
+    if gdf.crs is not None:
+        try:
+            epsg_code = gdf.crs.to_epsg()
+            if epsg_code != 4326:
+                gdf = gdf.to_crs(epsg=4326)
+                original_crs_desc = f"EPSG:{epsg_code} (已自動轉投影為 WGS84 EPSG:4326)"
+            else:
+                original_crs_desc = "WGS84 (EPSG:4326)"
+        except Exception:
+            gdf = gdf.to_crs(epsg=4326)
+            original_crs_desc = f"{str(gdf.crs)} (已自動轉投影為 WGS84 EPSG:4326)"
+    else:
+        # 無明確投影宣告時：檢查幾何數值範圍自動推論
+        total_bounds = gdf.total_bounds
+        if len(total_bounds) == 4:
+            minx, miny, maxx, maxy = total_bounds
+            if minx > 50000 and miny > 100000:
+                # 典型台灣 TWD97 二度分帶 (X: 150000~350000, Y: 2400000~2800000)
+                gdf.set_crs(epsg=3826, inplace=True)
+                gdf = gdf.to_crs(epsg=4326)
+                original_crs_desc = "未明確宣告投影 (偵測為台灣 TWD97 EPSG:3826，已自動轉換為 WGS84)"
+            elif 118.0 <= minx <= 124.0 and 21.0 <= miny <= 27.0:
+                gdf.set_crs(epsg=4326, inplace=True)
+                original_crs_desc = "未明確宣告投影 (數值落於台灣經緯度，已指派為 WGS84)"
+            else:
+                original_crs_desc = "未宣告投影且範圍異常"
+
+    # 防呆校正：點圖層經緯度反轉偵測 (例如 lat ~ 22, lon ~ 120 誤植顛倒)
+    if len(gdf) > 0 and gdf.geometry.geom_type.iloc[0] in ['Point', 'MultiPoint']:
+        sample_x = gdf.geometry.x.median()
+        sample_y = gdf.geometry.y.median()
+        if 20.0 <= sample_x <= 26.0 and 119.0 <= sample_y <= 123.0:
+            gdf['geometry'] = gdf.geometry.apply(lambda p: Point(p.y, p.x) if p and not p.is_empty else p)
+
+    return gdf, original_crs_desc
+
+def _inspect_layer_gdf(gdf, layer_key):
+    """檢驗圖資幾何類型、坐標範圍與核心必要欄位規格，回傳診斷結果"""
+    schema = LAYER_SCHEMAS.get(layer_key)
+    if not schema:
+        return {"valid": False, "errors": [f"不支援的圖資分類代碼: {layer_key}"]}
+    
+    feature_count = len(gdf)
+    if feature_count == 0:
+        return {"valid": False, "errors": ["圖資中無任何空間圖徵 (圖徵數量為 0)"]}
+    
+    geom_types_in_data = list(set(gdf.geometry.geom_type.dropna().unique()))
+    expected_geom = schema["geom_types"]
+    geom_matched = any(t in expected_geom for t in geom_types_in_data)
+    
+    errors = []
+    warnings = []
+    
+    if not geom_matched:
+        errors.append(f"幾何類型不相符：此圖資分類要求為【{' / '.join(expected_geom)}】，但上傳檔案為【{' / '.join(geom_types_in_data)}】")
+        
+    total_bounds = gdf.total_bounds
+    if len(total_bounds) == 4:
+        minx, miny, maxx, maxy = total_bounds
+        if not (118.0 <= minx <= 124.0 and 21.0 <= miny <= 27.0):
+            warnings.append(f"圖資邊界 [{minx:.3f}, {miny:.3f}, {maxx:.3f}, {maxy:.3f}] 略超出台灣本島標準經緯度範圍 (119~123°E, 21~26°N)，請確認原始坐標投影。")
+            
+    col_map = {str(c).strip().upper(): c for c in gdf.columns}
+    missing_required = []
+    matched_required = []
+    
+    for req_col, info in schema["required_fields"].items():
+        found = None
+        if req_col.upper() in col_map:
+            found = col_map[req_col.upper()]
+        else:
+            for alias in info.get("aliases", []):
+                if alias.upper() in col_map:
+                    found = col_map[alias.upper()]
+                    break
+        if found:
+            matched_required.append({"field": req_col, "source_col": found, "name": info["name"]})
+        else:
+            missing_required.append({"field": req_col, "name": info["name"], "reason": info["reason"]})
+            errors.append(f"缺少必要核心屬性欄位：【{req_col}】({info['name']}) - 用途：{info['reason']}")
+            
+    matched_optional = []
+    missing_optional = []
+    for opt_col, info in schema.get("optional_fields", {}).items():
+        found = None
+        if opt_col.upper() in col_map:
+            found = col_map[opt_col.upper()]
+        else:
+            for alias in info.get("aliases", []):
+                if alias.upper() in col_map:
+                    found = col_map[alias.upper()]
+                    break
+        if found:
+            matched_optional.append({"field": opt_col, "source_col": found, "name": info["name"]})
+        else:
+            missing_optional.append({"field": opt_col, "name": info["name"]})
+            
+    valid = (len(errors) == 0)
+    
+    guidance = ""
+    if not valid:
+        missing_labels = [f"【{m['field']}】({m['name']})" for m in missing_required]
+        guidance = (
+            f"建議修正方式：請於 QGIS 或 ArcGIS 中開啟該圖層的「屬性工作表 (Attribute Table)」，"
+            f"確認是否具備下列欄位：{', '.join(missing_labels)}。"
+            f"若原始欄位名稱不同，可使用「欄位計算器 (Field Calculator)」或重命名工具調整為規範名稱後重新打包 ZIP 上傳。"
+        )
+        
+    return {
+        "valid": valid,
+        "layer_key": layer_key,
+        "layer_name": schema["name"],
+        "target_file": schema["target_file"],
+        "feature_count": feature_count,
+        "detected_geom_type": geom_types_in_data,
+        "expected_geom_type": expected_geom,
+        "bounds": [round(b, 4) for b in total_bounds],
+        "missing_required": missing_required,
+        "matched_required": matched_required,
+        "matched_optional": matched_optional,
+        "missing_optional": missing_optional,
+        "errors": errors,
+        "warnings": warnings,
+        "guidance": guidance
+    }
 
 from shapely import force_2d
 
@@ -513,7 +824,19 @@ class WebGISRequestHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         content_length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else "{}"
+        raw_body = self.rfile.read(content_length) if content_length > 0 else b""
+        content_type = self.headers.get('Content-Type', '')
+        body = "{}"
+        if 'application/json' in content_type:
+            try:
+                body = raw_body.decode('utf-8')
+            except Exception:
+                body = raw_body.decode('utf-8', errors='ignore')
+        elif not content_type or 'text' in content_type:
+            try:
+                body = raw_body.decode('utf-8')
+            except Exception:
+                body = "{}"
         ip = self._get_client_ip()
 
         if self.path == '/api/analysis':
@@ -673,55 +996,134 @@ class WebGISRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json({"error": str(e)}, status=500)
             return
 
+        elif self.path == '/api/admin/validate_layer':
+            session = self._get_auth_session()
+            if not session:
+                self._send_json({"error": "未授權存取：請先登入管理者帳號"}, status=401)
+                return
+            try:
+                content_type = self.headers.get('Content-Type', '')
+                if 'multipart/form-data' in content_type:
+                    fields, files = _parse_multipart_form(self.headers, raw_body)
+                    layer_key = fields.get('layer_key', '')
+                    file_info = files.get('file')
+                    if not file_info:
+                        self._send_json({"error": "未接收到任何上傳檔案"}, status=400)
+                        return
+                    filename = file_info['filename']
+                    content_bytes = file_info['content']
+                else:
+                    req = json.loads(body)
+                    layer_key = req.get('layer_key', '')
+                    filename = req.get('filename', 'layer.geojson')
+                    if 'geojson' in req:
+                        content_bytes = json.dumps(req['geojson']).encode('utf-8')
+                    elif 'file_base64' in req:
+                        import base64
+                        content_bytes = base64.b64decode(req['file_base64'])
+                    else:
+                        self._send_json({"error": "缺少圖資內容"}, status=400)
+                        return
+                
+                if not layer_key or layer_key not in LAYER_SCHEMAS:
+                    self._send_json({"error": f"不支援的圖資分類代碼: {layer_key}"}, status=400)
+                    return
+                
+                gdf, crs_desc = _extract_gdf_from_upload(content_bytes, filename)
+                res = _inspect_layer_gdf(gdf, layer_key)
+                res['original_crs'] = crs_desc
+                res['filename'] = filename
+                self._send_json(res)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self._send_json({"valid": False, "errors": [f"檔案解析或檢驗失敗: {str(e)}"], "error": str(e)}, status=400)
+            return
+
         elif self.path == '/api/admin/upload_layer':
             session = self._get_auth_session()
             if not session:
                 self._send_json({"error": "未授權存取：請先登入管理者帳號"}, status=401)
                 return
             try:
-                req = json.loads(body)
-                county = req.get('county', 'kaohsiung')
-                layer_key = req.get('layer_key')
-                geojson_data = req.get('geojson')
+                content_type = self.headers.get('Content-Type', '')
+                force = False
+                if 'multipart/form-data' in content_type:
+                    fields, files = _parse_multipart_form(self.headers, raw_body)
+                    county = fields.get('county', 'kaohsiung')
+                    layer_key = fields.get('layer_key', '')
+                    force = fields.get('force', 'false').lower() == 'true'
+                    file_info = files.get('file')
+                    if not file_info:
+                        self._send_json({"error": "未接收到任何上傳檔案"}, status=400)
+                        return
+                    filename = file_info['filename']
+                    content_bytes = file_info['content']
+                else:
+                    req = json.loads(body)
+                    county = req.get('county', 'kaohsiung')
+                    layer_key = req.get('layer_key', '')
+                    force = req.get('force', False)
+                    filename = req.get('filename', 'layer.geojson')
+                    if 'geojson' in req:
+                        content_bytes = json.dumps(req['geojson']).encode('utf-8')
+                    elif 'file_base64' in req:
+                        import base64
+                        content_bytes = base64.b64decode(req['file_base64'])
+                    else:
+                        self._send_json({"error": "缺少圖資內容"}, status=400)
+                        return
 
-                file_map = {
-                    "sidewalk": "sidewalk.geojson",
-                    "poi": "poi.geojson",
-                    "accidents": "accidents.geojson",
-                    "road_priority": "road_priority.geojson",
-                    "population_bsa": "population_bsa.geojson",
-                    "town_boundary": "town_boundary.geojson",
-                    "village_boundary": "village_boundary.geojson"
-                }
-
-                if not layer_key or layer_key not in file_map:
+                if not layer_key or layer_key not in LAYER_SCHEMAS:
                     self._send_json({"error": f"不支援的圖資分類: {layer_key}"}, status=400)
                     return
-                if not geojson_data or not isinstance(geojson_data, dict):
-                    self._send_json({"error": "無效的 GeoJSON 資料格式"}, status=400)
+
+                schema = LAYER_SCHEMAS[layer_key]
+                target_filename = schema["target_file"]
+
+                # 讀取並轉為 GeoDataFrame (自動轉換坐標至 WGS84 EPSG:4326)
+                gdf, crs_desc = _extract_gdf_from_upload(content_bytes, filename)
+                inspect_res = _inspect_layer_gdf(gdf, layer_key)
+
+                # 若未通過規格檢查且未強制匯入，返回 400 阻擋並提供紅字清單
+                if not inspect_res['valid'] and not force:
+                    self._send_json({
+                        "success": False,
+                        "error": "圖資未通過欄位規格檢驗，已阻擋線上覆蓋！請參考檢驗診斷修正後重新上傳。",
+                        "validation": inspect_res
+                    }, status=400)
                     return
 
-                filename = file_map[layer_key]
-                target_path = os.path.join(DATA_DIR, county, filename)
-                with open(target_path, 'w', encoding='utf-8') as f:
-                    json.dump(geojson_data, f, ensure_ascii=False)
+                target_dir = os.path.join(DATA_DIR, county)
+                os.makedirs(target_dir, exist_ok=True)
+                target_path = os.path.join(target_dir, target_filename)
 
-                # 若為人行道，同步更新 .gz 壓縮檔
+                # 輸出 GeoJSON 檔案 (標準 UTF-8)
+                gdf.to_file(target_path, driver='GeoJSON', encoding='utf-8')
+
+                # 若為人行道圖資，同步壓縮為 .gz 檔案以支援 GitHub 託管與加速傳輸
                 if layer_key == "sidewalk":
                     import gzip
-                    gz_path = os.path.join(DATA_DIR, county, "sidewalk.geojson.gz")
+                    gz_path = os.path.join(target_dir, "sidewalk.geojson.gz")
                     with open(target_path, 'rb') as f_in, gzip.open(gz_path, 'wb', compresslevel=6) as f_out:
                         while chunk := f_in.read(1024 * 1024):
                             f_out.write(chunk)
 
-                # 即時更新記憶體快取
+                # 即時清除並重新載入記憶體快取
                 if county in CACHE:
                     del CACHE[county]
                 load_county_data(county)
 
-                cnt = len(geojson_data.get('features', []))
-                auth_db.add_audit_log(session['username'], "upload_layer", f"置換更新圖資 {filename} ({cnt} 筆圖徵)", ip)
-                self._send_json({"success": True, "message": f"圖資 {filename} 更新成功！共 {cnt} 筆圖徵", "count": cnt})
+                cnt = len(gdf)
+                auth_db.add_audit_log(session['username'], "upload_layer", f"更新圖資 {target_filename} (來源: {filename}, {cnt:,} 筆圖徵, {crs_desc})", ip)
+                self._send_json({
+                    "success": True,
+                    "message": f"圖資【{schema['name']}】更新成功！共 {cnt:,} 筆圖徵",
+                    "count": cnt,
+                    "target_file": target_filename,
+                    "crs_desc": crs_desc,
+                    "validation": inspect_res
+                })
             except Exception as e:
                 import traceback
                 traceback.print_exc()

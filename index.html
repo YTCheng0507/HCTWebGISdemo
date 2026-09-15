@@ -659,10 +659,10 @@
       </nav>
 
       <div class="admin-modal-body">
-        <!-- 分頁 1: 圖資上傳 -->
-        <div id="admin-tab-upload" class="admin-tab-pane active">
+        <!-- 分頁 1: 圖資上傳與格式檢查 -->
+        <div id="admin-tab-upload" class="admin-tab-pane active" style="display: flex; flex-direction: column; gap: 14px;">
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 13px; line-height: 1.6;">
-            💡 <strong>免用 Git / 命令列</strong>：直接在瀏覽器選擇欲更新的 GeoJSON 檔案即可完成線上置換！後台會自動刷新伺服器快取並即時渲染至地圖。
+            💡 <strong>免用 Git / 命令列</strong>：支援 <strong>Shapefile (.zip 壓縮檔)</strong> 與 <strong>GeoJSON</strong> 線上置換！後台自動轉換坐標系統（TWD97 轉 WGS84）、解析中文編碼，並在上傳前進行<strong>「屬性欄位合規性診斷」</strong>，防止欄位缺失影響空間分析。
           </div>
 
           <div>
@@ -686,14 +686,106 @@
           </div>
 
           <div>
-            <label style="font-weight: 600; display: block; margin-bottom: 6px;">3. 選擇本機 GeoJSON 檔案：</label>
-            <input type="file" id="admin-upload-file" accept=".geojson,.json" style="width: 100%; font-size: 13px; padding: 6px; border: 1px dashed #94a3b8; border-radius: 6px; background: #fafafa; cursor: pointer;" />
-            <div id="admin-file-info" style="font-size: 12px; color: #64748b; margin-top: 4px;"></div>
+            <label style="font-weight: 600; display: block; margin-bottom: 6px;">3. 選擇本機圖資檔案 (.zip 或 .geojson)：</label>
+            <input type="file" id="admin-upload-file" accept=".zip,.geojson,.json" style="width: 100%; font-size: 13px; padding: 7px; border: 1px dashed #94a3b8; border-radius: 6px; background: #fafafa; cursor: pointer;" />
+            <div style="font-size: 11.5px; color: #64748b; margin-top: 4px;">
+              📌 <strong>格式指引</strong>：若為 Shapefile，請將包含 <code>.shp</code>, <code>.shx</code>, <code>.dbf</code>, <code>.prj</code> 之檔案選取後壓縮為單一 <code>.zip</code> 上傳。
+            </div>
+            <div id="admin-file-info" style="font-size: 12px; color: #0369a1; margin-top: 4px; font-weight: 500;"></div>
           </div>
+
+          <!-- 即時預檢診斷盒 (Pre-flight Validation Box) -->
+          <div id="admin-validation-box" style="display: none; border-radius: 6px; padding: 12px; font-size: 13px; border: 1px solid #cbd5e1; background: #f8fafc;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-weight: 700; font-size: 13.5px;" id="admin-val-title">🔍 圖資規格自動診斷結果</span>
+              <span id="admin-val-badge" style="padding: 2px 8px; border-radius: 12px; font-size: 11.5px; font-weight: 600;"></span>
+            </div>
+
+            <!-- 圖資基本摘要 -->
+            <div id="admin-val-meta" style="font-size: 12px; color: #475569; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 8px; background: #fff; padding: 8px; border-radius: 4px; border: 1px solid #e2e8f0;"></div>
+
+            <!-- 紅字警告清單 (欄位缺失 / 幾何錯誤) -->
+            <div id="admin-val-errors" style="display: none; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 10px; color: #991b1b; margin-bottom: 8px;">
+              <div style="font-weight: 700; display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+                <span style="font-size: 15px;">❌</span> 檢驗未通過！缺少核心欄位或幾何不符（已禁止上傳）：
+              </div>
+              <ul id="admin-val-error-list" style="margin: 0; padding-left: 20px; font-size: 12.5px; line-height: 1.6;"></ul>
+              <div id="admin-val-guidance" style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed #fca5a5; font-size: 12px; color: #7f1d1d; line-height: 1.5;"></div>
+            </div>
+
+            <!-- 綠色合格通知 -->
+            <div id="admin-val-success" style="display: none; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 10px; color: #166534;">
+              <div style="font-weight: 700; display: flex; align-items: center; gap: 4px;">
+                <span style="font-size: 15px;">✅</span> 規格檢驗完全合格！已具備所有核心必要屬性，可安全匯入。
+              </div>
+              <div id="admin-val-matched-fields" style="font-size: 12px; margin-top: 4px; color: #15803d;"></div>
+            </div>
+          </div>
+
+          <!-- 可折疊「各圖資必要欄位標準對照表」 -->
+          <details style="font-size: 12.5px; color: #475569; background: #f1f5f9; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1;">
+            <summary style="font-weight: 600; cursor: pointer; color: #1e293b;">📋 點此查看平台 7 大圖資「必要欄位規範標準表」</summary>
+            <div style="margin-top: 8px; overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 11.5px; background: #fff;">
+                <thead>
+                  <tr style="background: #e2e8f0; color: #1e293b; text-align: left;">
+                    <th style="padding: 5px 8px; border: 1px solid #cbd5e1;">圖資類別</th>
+                    <th style="padding: 5px 8px; border: 1px solid #cbd5e1;">幾何類型</th>
+                    <th style="padding: 5px 8px; border: 1px solid #cbd5e1;">核心必要欄位 (缺少跳紅字)</th>
+                    <th style="padding: 5px 8px; border: 1px solid #cbd5e1;">用途與說明</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1; font-weight: 600;">人行步道 (sidewalk)</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1;">Polygon / Line</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1; color: #b91c1c; font-family: monospace;">SWW_WTH, SW_AREA, SW_BRKRAT, SW_BK_B, SW_BK_L</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1;">人行淨寬 (m)、鋪面面積、破損率、平整度指標 (2.0 V2 核心)</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1; font-weight: 600;">交通事故 (accidents)</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1;">Point</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1; color: #b91c1c; font-family: monospace;">ACC_TYPE, YEAR, DEAD_CNT, INJ_CNT</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1;">事故類型 (A1/A2)、年度、死傷人數 (交通安全指數計算)</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1; font-weight: 600;">生活設施 (poi)</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1;">Point</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1; color: #b91c1c; font-family: monospace;">POI_NAME, TYPE, IS_SCOREABLE</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1;">設施名稱、8大分類 (學校/醫療/交通等)、是否納入計分</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1; font-weight: 600;">最小統計區人口 (population_bsa)</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1;">Polygon</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1; color: #b91c1c; font-family: monospace;">P_CNT, H_CNT, CODEBASE</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1;">常住人口數、戶數、統計區唯一代碼 (生活圈人口密度)</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1; font-weight: 600;">優先改善路段 (road_priority)</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1;">LineString</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1; color: #b91c1c; font-family: monospace;">ROADNAME_F, I_TOTAL</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1;">道路名稱、綜合優先度總分 (改善排序)</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1; font-weight: 600;">行政區界 (town_boundary)</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1;">Polygon</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1; color: #b91c1c; font-family: monospace;">TOWNNAME, COUNTYNAME</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1;">鄉鎮市區名、所屬縣市名 (行政區過濾)</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1; font-weight: 600;">村里界線 (village_boundary)</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1;">Polygon</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1; color: #b91c1c; font-family: monospace;">VILLNAME, TOWNNAME</td>
+                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1;">村里名、所屬行政區名 (村里過濾定位)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
 
           <div id="admin-upload-status" style="display: none; padding: 8px 12px; border-radius: 6px; font-size: 13px;"></div>
 
-          <button id="btn-submit-upload" class="btn btn-primary" style="padding: 8px 16px; border-radius: 6px; font-weight: 600; align-self: flex-start; cursor: pointer;">
+          <button id="btn-submit-upload" class="btn btn-primary" style="padding: 8px 18px; border-radius: 6px; font-weight: 600; align-self: flex-start; cursor: pointer;" disabled>
             🚀 確認上傳並更新圖資
           </button>
         </div>

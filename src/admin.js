@@ -41,13 +41,24 @@ class AdminPanel {
     this.tabBtns = document.querySelectorAll('.admin-tab-btn');
     this.tabPanes = document.querySelectorAll('.admin-tab-pane');
 
-    // 分頁 1: 圖資上傳
+    // 分頁 1: 圖資上傳與格式檢查
     this.uploadCountySelect = document.getElementById('admin-upload-county');
     this.uploadTypeSelect = document.getElementById('admin-upload-type');
     this.uploadFileInput = document.getElementById('admin-upload-file');
     this.fileInfo = document.getElementById('admin-file-info');
     this.uploadStatus = document.getElementById('admin-upload-status');
     this.btnSubmitUpload = document.getElementById('btn-submit-upload');
+
+    // 預檢診斷盒相關元素
+    this.valBox = document.getElementById('admin-validation-box');
+    this.valTitle = document.getElementById('admin-val-title');
+    this.valBadge = document.getElementById('admin-val-badge');
+    this.valMeta = document.getElementById('admin-val-meta');
+    this.valErrors = document.getElementById('admin-val-errors');
+    this.valErrorList = document.getElementById('admin-val-error-list');
+    this.valGuidance = document.getElementById('admin-val-guidance');
+    this.valSuccess = document.getElementById('admin-val-success');
+    this.valMatchedFields = document.getElementById('admin-val-matched-fields');
 
     // 分頁 2: 權重微調
     this.sliderWalk = document.getElementById('input-weight-walk');
@@ -145,16 +156,16 @@ class AdminPanel {
       });
     });
 
-    // 檔案選擇變更
+    // 檔案選取變更 -> 即時觸發 Pre-flight 規格診斷
     if (this.uploadFileInput) {
-      this.uploadFileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-          const mb = (file.size / (1024 * 1024)).toFixed(2);
-          this.fileInfo.innerText = `📄 檔案大小: ${mb} MB (${file.size.toLocaleString()} bytes)`;
-          this.fileInfo.style.color = file.size > 100 * 1024 * 1024 ? '#d97706' : '#16a34a';
-        } else {
-          this.fileInfo.innerText = '';
+      this.uploadFileInput.addEventListener('change', () => this.validateLayerFile());
+    }
+
+    // 目標圖資分類切換 -> 若已有選取檔案則重新驗證
+    if (this.uploadTypeSelect) {
+      this.uploadTypeSelect.addEventListener('change', () => {
+        if (this.uploadFileInput && this.uploadFileInput.files.length > 0) {
+          this.validateLayerFile();
         }
       });
     }
@@ -368,91 +379,207 @@ class AdminPanel {
     }
   }
 
-  // --- 分頁 1: 圖資上傳 ---
-  async uploadLayerFile() {
-    const file = this.uploadFileInput.files[0];
+  // --- 分頁 1: 圖資規格即時預檢 (Pre-flight Inspection) ---
+  async validateLayerFile() {
+    const file = this.uploadFileInput ? this.uploadFileInput.files[0] : null;
     if (!file) {
-      alert('請先點擊按鈕選擇要上傳的 GeoJSON 檔案！');
+      if (this.valBox) this.valBox.style.display = 'none';
+      if (this.fileInfo) this.fileInfo.innerText = '';
+      if (this.btnSubmitUpload) {
+        this.btnSubmitUpload.disabled = true;
+        this.btnSubmitUpload.innerText = '🚀 確認上傳並更新圖資';
+      }
+      return;
+    }
+
+    const mb = (file.size / (1024 * 1024)).toFixed(2);
+    const isZip = file.name.toLowerCase().endsWith('.zip');
+    const isJson = file.name.toLowerCase().endsWith('.geojson') || file.name.toLowerCase().endsWith('.json');
+
+    if (!isZip && !isJson) {
+      if (this.valBox) this.valBox.style.display = 'block';
+      this.valTitle.innerText = '🔍 不支援的檔案格式';
+      this.valBadge.innerText = '🔴 格式錯誤';
+      this.valBadge.style.background = '#fee2e2';
+      this.valBadge.style.color = '#b91c1c';
+      this.valMeta.innerHTML = `<span style="grid-column: 1 / -1; color: #dc2626;">僅支援 Shapefile (.zip 壓縮包) 或 .geojson / .json 格式檔案！</span>`;
+      if (this.valErrors) {
+        this.valErrors.style.display = 'block';
+        this.valErrorList.innerHTML = '<li>請將 Shapefile 相關檔案 (.shp, .shx, .dbf, .prj) 壓縮為 .zip 後再行上傳。</li>';
+        this.valGuidance.style.display = 'none';
+      }
+      if (this.valSuccess) this.valSuccess.style.display = 'none';
+      if (this.btnSubmitUpload) {
+        this.btnSubmitUpload.disabled = true;
+        this.btnSubmitUpload.innerText = '❌ 格式不支援，禁止上傳';
+      }
+      return;
+    }
+
+    this.fileInfo.innerText = `📄 已選取檔案：${file.name} (大小: ${mb} MB)`;
+
+    // 進入診斷中狀態
+    if (this.valBox) {
+      this.valBox.style.display = 'block';
+      this.valBox.style.borderColor = '#93c5fd';
+      this.valTitle.innerText = '🔍 圖資規格自動診斷中...';
+      this.valBadge.innerText = '⏳ 檢驗中';
+      this.valBadge.style.background = '#e0e7ff';
+      this.valBadge.style.color = '#3730a3';
+      this.valMeta.innerHTML = `<span style="grid-column: 1 / -1; color: #64748b;">正在解析圖資幾何維度、坐標投影與核心屬性欄位，請稍候...</span>`;
+      if (this.valErrors) this.valErrors.style.display = 'none';
+      if (this.valSuccess) this.valSuccess.style.display = 'none';
+    }
+    if (this.btnSubmitUpload) {
+      this.btnSubmitUpload.disabled = true;
+      this.btnSubmitUpload.innerText = '⏳ 正在檢核規格，暫時鎖定...';
+    }
+
+    try {
+      const layer_key = this.uploadTypeSelect.value;
+      const formData = new FormData();
+      formData.append('layer_key', layer_key);
+      formData.append('file', file);
+
+      const resp = await this.authFetch('/api/admin/validate_layer', {
+        method: 'POST',
+        body: formData
+      });
+
+      const res = await resp.json();
+
+      if (res.valid) {
+        // 檢驗合格 (綠色狀態)
+        this.valTitle.innerText = `🔍 圖資規格診斷結果：【${res.layer_name}】`;
+        this.valBadge.innerText = '🟢 檢驗合格';
+        this.valBadge.style.background = '#dcfce7';
+        this.valBadge.style.color = '#15803d';
+        this.valBox.style.borderColor = '#86efac';
+
+        const geoms = (res.detected_geom_type || []).join(', ');
+        this.valMeta.innerHTML = `
+          <div><strong>圖徵筆數：</strong>${(res.feature_count || 0).toLocaleString()} 筆</div>
+          <div><strong>幾何類型：</strong>${geoms} (相符)</div>
+          <div><strong>坐標投影：</strong>${res.original_crs || 'WGS84'}</div>
+          <div><strong>目標規格檔：</strong>${res.target_file}</div>
+        `;
+
+        if (this.valErrors) this.valErrors.style.display = 'none';
+        if (this.valSuccess) {
+          this.valSuccess.style.display = 'block';
+          const matched = (res.matched_required || []).map(m => `<span style="display: inline-block; background: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 4px; margin: 2px; font-family: monospace;">✔ ${m.field} (${m.name})</span>`).join(' ');
+          this.valMatchedFields.innerHTML = `<strong>已具備之核心必要欄位：</strong><br/>${matched}`;
+        }
+
+        // 解鎖上傳按鈕
+        this.btnSubmitUpload.disabled = false;
+        this.btnSubmitUpload.innerText = '🚀 確認上傳並更新圖資';
+      } else {
+        // 檢驗未通過 (紅色警示狀態，阻擋上傳)
+        this.valTitle.innerText = `🔍 圖資規格診斷結果：【${res.layer_name || layer_key}】未通過`;
+        this.valBadge.innerText = '🔴 檢驗未通過';
+        this.valBadge.style.background = '#fee2e2';
+        this.valBadge.style.color = '#b91c1c';
+        this.valBox.style.borderColor = '#fca5a5';
+
+        const geoms = (res.detected_geom_type || []).join(', ') || '未知';
+        this.valMeta.innerHTML = `
+          <div><strong>圖徵筆數：</strong>${(res.feature_count || 0).toLocaleString()} 筆</div>
+          <div><strong>幾何類型：</strong>${geoms}</div>
+          <div><strong>坐標投影：</strong>${res.original_crs || '未知'}</div>
+          <div><strong>目標規格檔：</strong>${res.target_file || layer_key}</div>
+        `;
+
+        if (this.valSuccess) this.valSuccess.style.display = 'none';
+        if (this.valErrors) {
+          this.valErrors.style.display = 'block';
+          const errorItems = (res.errors || []).map(err => `<li>${err}</li>`).join('');
+          this.valErrorList.innerHTML = errorItems || `<li>圖資格式未符合系統規格</li>`;
+          if (res.guidance) {
+            this.valGuidance.innerHTML = `💡 <strong>修復指引：</strong>${res.guidance}`;
+            this.valGuidance.style.display = 'block';
+          } else {
+            this.valGuidance.style.display = 'none';
+          }
+        }
+
+        // 鎖定上傳按鈕
+        this.btnSubmitUpload.disabled = true;
+        this.btnSubmitUpload.innerText = '❌ 規格未符，禁止上傳';
+      }
+    } catch (err) {
+      console.error('預檢失敗:', err);
+      this.valTitle.innerText = '🔍 圖資規格診斷異常';
+      this.valBadge.innerText = '⚠️ 診斷出錯';
+      this.valBadge.style.background = '#fef3c7';
+      this.valBadge.style.color = '#b45309';
+      this.valMeta.innerHTML = `<span style="grid-column: 1 / -1; color: #dc2626;">預檢過程發生例外錯誤: ${err.message}</span>`;
+      this.btnSubmitUpload.disabled = true;
+      this.btnSubmitUpload.innerText = '❌ 診斷失敗，禁止上傳';
+    }
+  }
+
+  // --- 分頁 1: 確認上傳並置換圖資 ---
+  async uploadLayerFile() {
+    const file = this.uploadFileInput ? this.uploadFileInput.files[0] : null;
+    if (!file) {
+      alert('請先選擇要上傳的 Shapefile (.zip) 或 GeoJSON 檔案！');
       return;
     }
 
     const county = this.uploadCountySelect.value;
     const layer_key = this.uploadTypeSelect.value;
 
-    if (!confirm(`確定要將本機檔案「${file.name}」上傳並覆蓋 ${county} 的「${layer_key}」圖資嗎？\n\n上傳完成後，後台將自動更新記憶體快取、寫入稽核紀錄並同步刷新地圖顯示。`)) {
+    if (!confirm(`確定要將檔案「${file.name}」上傳並覆蓋 ${county} 的「${layer_key}」圖資嗎？\n\n系統將自動完成轉檔、坐標轉投影（WGS84 EPSG:4326）、壓製快顯資料並即時重載地圖。`)) {
       return;
     }
 
     this.btnSubmitUpload.disabled = true;
-    this.btnSubmitUpload.innerText = '⏳ 正在讀取並解析 GeoJSON...';
+    this.btnSubmitUpload.innerText = '⏳ 正在上傳與轉檔中...';
     this.uploadStatus.style.display = 'block';
     this.uploadStatus.style.background = '#eff6ff';
     this.uploadStatus.style.color = '#1d4ed8';
     this.uploadStatus.style.border = '1px solid #bfdbfe';
-    this.uploadStatus.innerText = '正在讀取檔案內容，請稍候...';
+    this.uploadStatus.innerText = '正在傳輸檔案至伺服器並執行轉檔與坐標系統校驗，請稍候...';
 
-    const reader = new FileReader();
-    reader.onerror = () => {
+    try {
+      const formData = new FormData();
+      formData.append('county', county);
+      formData.append('layer_key', layer_key);
+      formData.append('file', file);
+
+      const resp = await this.authFetch('/api/admin/upload_layer', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        this.uploadStatus.style.background = '#f0fdf4';
+        this.uploadStatus.style.color = '#16a34a';
+        this.uploadStatus.style.border = '1px solid #bbf7d0';
+        this.uploadStatus.innerHTML = `🎉 <strong>上傳成功！</strong>${data.message}（坐標：${data.crs_desc || 'EPSG:4326'}）。地圖正在自動重載新圖資...`;
+
+        if (window.layerManager) {
+          try {
+            await window.layerManager.loadCountyLayers(county);
+          } catch (err) {
+            console.warn('地圖圖資重載通知:', err);
+          }
+        }
+        this.fetchSystemStatus();
+      } else {
+        throw new Error(data.error || '伺服器上傳處理失敗');
+      }
+    } catch (err) {
       this.uploadStatus.style.background = '#fef2f2';
       this.uploadStatus.style.color = '#dc2626';
-      this.uploadStatus.innerText = '❌ 本機讀取檔案失敗！';
+      this.uploadStatus.style.border = '1px solid #fecaca';
+      this.uploadStatus.innerText = `❌ 上傳更新失敗: ${err.message}`;
+    } finally {
       this.btnSubmitUpload.disabled = false;
       this.btnSubmitUpload.innerText = '🚀 確認上傳並更新圖資';
-    };
-
-    reader.onload = async (e) => {
-      try {
-        this.uploadStatus.innerText = '檔案讀取完成，正在驗證 JSON 語法格式...';
-        const text = e.target.result;
-        const geojsonData = JSON.parse(text);
-
-        if (!geojsonData.type || (!geojsonData.features && geojsonData.type !== 'FeatureCollection')) {
-          throw new Error('該檔案不是標準的 GeoJSON FeatureCollection 格式！');
-        }
-
-        const count = geojsonData.features ? geojsonData.features.length : 0;
-        this.uploadStatus.innerText = `格式驗證正確 (共 ${count.toLocaleString()} 筆圖徵)，正在上傳伺服器並重置快取...`;
-
-        const resp = await this.authFetch('/api/admin/upload_layer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            county,
-            layer_key,
-            geojson: geojsonData
-          })
-        });
-
-        const data = await resp.json();
-        if (resp.ok && data.success) {
-          this.uploadStatus.style.background = '#f0fdf4';
-          this.uploadStatus.style.color = '#16a34a';
-          this.uploadStatus.style.border = '1px solid #bbf7d0';
-          this.uploadStatus.innerText = `🎉 上傳成功！已替換 ${data.message}。地圖正在自動重載圖資...`;
-
-          if (window.layerManager) {
-            try {
-              await window.layerManager.loadCountyLayers(county);
-            } catch (err) {
-              console.warn('地圖圖資重載通知:', err);
-            }
-          }
-          this.fetchSystemStatus();
-        } else {
-          throw new Error(data.error || '伺服器上傳處理失敗');
-        }
-      } catch (err) {
-        this.uploadStatus.style.background = '#fef2f2';
-        this.uploadStatus.style.color = '#dc2626';
-        this.uploadStatus.style.border = '1px solid #fecaca';
-        this.uploadStatus.innerText = `❌ 錯誤: ${err.message}`;
-      } finally {
-        this.btnSubmitUpload.disabled = false;
-        this.btnSubmitUpload.innerText = '🚀 確認上傳並更新圖資';
-      }
-    };
-
-    reader.readAsText(file);
+    }
   }
 
   // --- 分頁 2: 評鑑權重微調 ---
