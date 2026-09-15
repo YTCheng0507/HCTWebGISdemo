@@ -170,6 +170,7 @@ class WalkAnalysisTool {
     } catch (err) {
       console.warn('[WalkAnalysis] 生活圈分析中斷:', err.message);
       alert(err.message);
+      this.clear(); // 空間分析失敗或不予分析時，立即清除地圖上的生活圈標記與幾何，避免殘留
       window.dispatchEvent(new CustomEvent('analysis-error', { detail: err }));
     }
   }

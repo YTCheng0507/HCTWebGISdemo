@@ -328,6 +328,20 @@ class MobileUIManager {
       }
     });
 
+    // 停止與清除按鈕點擊時，關閉操作提示膠囊
+    const stopClearTools = [
+      'btn-draw-stop', 'btn-draw-clear', 'btn-walk-stop', 'btn-walk-clear',
+      'btn-measure-stop', 'btn-clear-tools'
+    ];
+    stopClearTools.forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.addEventListener('click', () => {
+          this.hideFloatingActionHint();
+        });
+      }
+    });
+
     // 分析完成事件
     window.addEventListener('analysis-complete', () => {
       if (this.isMobile() && this.isPortrait()) {
@@ -337,6 +351,11 @@ class MobileUIManager {
           this.rightDrawer.classList.add('mobile-sheet-show');
         }
       }
+    });
+
+    // 分析中止/錯誤事件：關閉浮動提示膠囊
+    window.addEventListener('analysis-error', () => {
+      this.hideFloatingActionHint();
     });
   }
 

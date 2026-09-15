@@ -401,11 +401,14 @@
           <!-- 區塊 A：手繪區域框選分析 -->
           <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
             <div class="section-title">手繪區域框選分析</div>
-            <div class="tool-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 8px;">
+            <div class="tool-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 6px;">
               <button id="btn-draw-polygon" class="tool-btn" style="background: #0284c7; color: #fff; font-weight: bold; font-size: 13px; padding: 7px 2px;">多邊形</button>
               <button id="btn-draw-rect" class="tool-btn" style="background: #0369a1; color: #fff; font-weight: bold; font-size: 13px; padding: 7px 2px;">矩形</button>
               <button id="btn-draw-circle" class="tool-btn" style="background: #075985; color: #fff; font-weight: bold; font-size: 13px; padding: 7px 2px;">圓形圈</button>
-              <button id="btn-draw-stop" class="tool-btn" style="background: #475569; color: #fff; font-weight: 500; font-size: 13px; padding: 7px 2px;" title="結束框選並回到地圖瀏覽">結束框選</button>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+              <button id="btn-draw-stop" class="tool-btn" style="background: #f1f5f9; color: #475569; font-weight: 500; font-size: 13px; padding: 6px 4px; border: 1px solid #cbd5e1;" title="結束框選模式並清除標記">結束框選</button>
+              <button id="btn-draw-clear" class="tool-btn" style="background: #fff; color: #dc2626; font-weight: 500; font-size: 13px; padding: 6px 4px; border: 1px solid #fca5a5;" title="清除目前框選範圍與評估結果">🗑️ 清除框選</button>
             </div>
             <div style="font-size: 12px; color: #64748b; line-height: 1.5;">點擊上方工具後於地圖點擊劃定評估範圍（雙擊閉合），系統將即時計算人行道覆蓋、POI豐富度與評估總分。</div>
           </div>
@@ -1289,6 +1292,16 @@
           btn.classList.add('active');
           const targetPane = document.getElementById(tabId);
           if (targetPane) targetPane.classList.add('active');
+
+          // 若切換至其他分頁且正在進行未完成的框選或選點，自動終止繪製手勢
+          if (tabId !== 'tab-analysis') {
+            if (typeof drawTool !== 'undefined' && drawTool && drawTool.isDrawing) {
+              drawTool.stopDrawing();
+            }
+            if (typeof walkTool !== 'undefined' && walkTool && walkTool.isActive) {
+              walkTool.stopSelection();
+            }
+          }
         });
       });
 
@@ -1418,10 +1431,18 @@
         drawTool.startCircleDraw();
       });
 
-      document.getElementById('btn-draw-stop').addEventListener('click', () => {
+      const handleClearOrStopDraw = () => {
         setDrawBtnActive(null);
-        drawTool.stopDrawing();
-      });
+        drawTool.clear();
+        layerMgr.clearAnalysisHighlights();
+        dashboard.closeDrawer();
+      };
+
+      document.getElementById('btn-draw-stop').addEventListener('click', handleClearOrStopDraw);
+      const btnDrawClear = document.getElementById('btn-draw-clear');
+      if (btnDrawClear) {
+        btnDrawClear.addEventListener('click', handleClearOrStopDraw);
+      }
 
       // GIS 量測工具按鈕
       document.getElementById('btn-measure-dist').addEventListener('click', () => {

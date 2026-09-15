@@ -331,29 +331,9 @@ class DrawAnalysisTool {
     this.triggerAnalysis(polygonFeature.geometry);
   }
 
-  // 結束框選模式 (回復地圖瀏覽拖曳手勢，清除未閉合軌跡)
+  // 結束框選模式 (回復地圖瀏覽拖曳手勢，完全清除框選幾何、軌跡與標記)
   stopDrawing() {
-    this.isDrawing = false;
-    this.drawMode = null;
-    this.points = [];
-    this.currentMouseCoord = null;
-    this.unbindEvents();
-
-    // 如果先前已完成過多邊形，保留該多邊形；清除未完成的點線
-    const src = this.map.getSource(this.sourceId);
-    if (src) {
-      const features = [];
-      if (this.finishedFeature) {
-        features.push(this.finishedFeature);
-      }
-      src.setData({ type: 'FeatureCollection', features });
-    }
-
-    // 移除框選按鈕的 active 狀態
-    ['btn-draw-polygon', 'btn-draw-rect', 'btn-draw-circle'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.classList.remove('active');
-    });
+    this.clear();
   }
 
   // 完全清除所有框選與標記
@@ -363,12 +343,23 @@ class DrawAnalysisTool {
     this.points = [];
     this.currentMouseCoord = null;
     this.finishedFeature = null;
+    window.lastAnalysisGeometry = null;
     this.unbindEvents();
 
     const src = this.map.getSource(this.sourceId);
     if (src) {
       src.setData({ type: 'FeatureCollection', features: [] });
     }
+
+    // 移除所有框選按鈕的 active 樣式與外框高亮
+    ['btn-draw-polygon', 'btn-draw-rect', 'btn-draw-circle'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.classList.remove('active');
+        el.style.outline = 'none';
+        el.style.boxShadow = 'none';
+      }
+    });
   }
 
   // 後端分析請求
@@ -403,6 +394,7 @@ class DrawAnalysisTool {
     } catch (err) {
       console.warn('[DrawAnalysis] 空間分析中止:', err.message);
       alert(err.message);
+      this.clear(); // 空間分析失敗或不予分析時，立即清除地圖上的框選範圍與幾何，避免殘留
       window.dispatchEvent(new CustomEvent('analysis-error', { detail: err }));
     }
   }
