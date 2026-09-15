@@ -138,11 +138,17 @@ class AdminPanel {
       btn.addEventListener('click', () => {
         const targetTab = btn.getAttribute('data-admin-tab');
         this.tabBtns.forEach(b => b.classList.remove('active'));
-        this.tabPanes.forEach(p => p.classList.remove('active'));
+        this.tabPanes.forEach(p => {
+          p.classList.remove('active');
+          p.style.display = 'none';
+        });
 
         btn.classList.add('active');
         const pane = document.getElementById(targetTab);
-        if (pane) pane.classList.add('active');
+        if (pane) {
+          pane.classList.add('active');
+          pane.style.display = 'flex';
+        }
 
         if (targetTab === 'admin-tab-status') {
           this.fetchSystemStatus();
@@ -369,6 +375,19 @@ class AdminPanel {
   openPanelModal() {
     if (this.modalPanel) {
       this.modalPanel.classList.add('show');
+      // 確保每次開啟時回到第一個分頁 (圖資更新) 並確實隱藏其他分頁
+      this.tabBtns.forEach(b => b.classList.remove('active'));
+      this.tabPanes.forEach(p => {
+        p.classList.remove('active');
+        p.style.display = 'none';
+      });
+      const firstBtn = this.tabBtns[0];
+      if (firstBtn) firstBtn.classList.add('active');
+      const firstPane = document.getElementById('admin-tab-upload');
+      if (firstPane) {
+        firstPane.classList.add('active');
+        firstPane.style.display = 'flex';
+      }
       this.fetchSystemStatus();
     }
   }
