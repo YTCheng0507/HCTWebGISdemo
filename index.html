@@ -157,18 +157,28 @@
             </div>
           </div>
 
-          <!-- 2. 圖資管理與透明度調節 -->
+          <!-- 2. 圖資管理與透明度調節 (支援圖層排放順序調整) -->
           <div>
-            <div class="section-title">圖資管理與透明度調節</div>
-            <div class="layer-list">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div class="section-title" style="margin-bottom: 0;">圖資管理與圖層順序</div>
+              <span style="font-size: 11px; color: #64748b;" title="列表上方之圖層將疊加於地圖最上層">▲ 上層 ｜ ▼ 下層</span>
+            </div>
+            <div id="layer-control-list" class="layer-list">
               <!-- 12公尺以上道路人本交通環境評估圖層 (預設開啟) -->
-              <div class="layer-item" style="flex-direction: column; align-items: stretch;">
+              <div class="layer-item" data-layer-key="roadPriority" data-layer-id="layer-road-priority" draggable="true" style="flex-direction: column; align-items: stretch;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <label class="layer-label">
-                    <input type="checkbox" id="chk-road-priority" checked />
-                    <span class="color-dot" style="background: #2563eb;"></span>
-                    <span>12公尺以上道路人本交通環境評估</span>
-                  </label>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span class="layer-drag-handle" title="按住拖曳調整順序">⠿</span>
+                    <label class="layer-label">
+                      <input type="checkbox" id="chk-road-priority" checked />
+                      <span class="color-dot" style="background: #2563eb;"></span>
+                      <span>12公尺以上道路評估</span>
+                    </label>
+                  </div>
+                  <div class="layer-order-controls">
+                    <button type="button" class="btn-layer-order btn-layer-up" title="圖層上移一層 (圖面疊於上方)">▲</button>
+                    <button type="button" class="btn-layer-order btn-layer-down" title="圖層下移一層 (圖面疊於下方)">▼</button>
+                  </div>
                 </div>
                 <div class="opacity-control">
                   <span>透明度</span>
@@ -178,13 +188,20 @@
               </div>
 
               <!-- 人行道圖層 (預設關閉，勾選時隨選即時加載) -->
-              <div class="layer-item" style="flex-direction: column; align-items: stretch;">
+              <div class="layer-item" data-layer-key="sidewalk" data-layer-id="layer-sidewalk" draggable="true" style="flex-direction: column; align-items: stretch;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <label class="layer-label">
-                    <input type="checkbox" id="chk-sidewalk" />
-                    <span class="color-dot" style="background: #81c784;"></span>
-                    <span>人行道實體普查圖資</span>
-                  </label>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span class="layer-drag-handle" title="按住拖曳調整順序">⠿</span>
+                    <label class="layer-label">
+                      <input type="checkbox" id="chk-sidewalk" />
+                      <span class="color-dot" style="background: #81c784;"></span>
+                      <span>人行道實體普查圖資</span>
+                    </label>
+                  </div>
+                  <div class="layer-order-controls">
+                    <button type="button" class="btn-layer-order btn-layer-up" title="圖層上移一層 (圖面疊於上方)">▲</button>
+                    <button type="button" class="btn-layer-order btn-layer-down" title="圖層下移一層 (圖面疊於下方)">▼</button>
+                  </div>
                 </div>
                 <div class="opacity-control">
                   <span>透明度</span>
@@ -194,13 +211,20 @@
               </div>
 
               <!-- 事故點圖層 (預設關閉) -->
-              <div class="layer-item" style="flex-direction: column; align-items: stretch;">
+              <div class="layer-item" data-layer-key="accidents" data-layer-id="layer-accidents" draggable="true" style="flex-direction: column; align-items: stretch;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <label class="layer-label">
-                    <input type="checkbox" id="chk-accidents" />
-                    <span style="color: #ea580c; font-size: 14px; margin-right: 2px; line-height: 1;">▲</span>
-                    <span>近三年事故點 (A1/A2)</span>
-                  </label>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span class="layer-drag-handle" title="按住拖曳調整順序">⠿</span>
+                    <label class="layer-label">
+                      <input type="checkbox" id="chk-accidents" />
+                      <span style="color: #ea580c; font-size: 14px; margin-right: 2px; line-height: 1;">▲</span>
+                      <span>近三年事故點 (A1/A2)</span>
+                    </label>
+                  </div>
+                  <div class="layer-order-controls">
+                    <button type="button" class="btn-layer-order btn-layer-up" title="圖層上移一層 (圖面疊於上方)">▲</button>
+                    <button type="button" class="btn-layer-order btn-layer-down" title="圖層下移一層 (圖面疊於下方)">▼</button>
+                  </div>
                 </div>
                 <div class="opacity-control">
                   <span>透明度</span>
@@ -241,13 +265,20 @@
               </div>
 
               <!-- POI 圖層 (預設關閉) -->
-              <div class="layer-item" style="flex-direction: column; align-items: stretch;">
+              <div class="layer-item" data-layer-key="poi" data-layer-id="layer-poi" draggable="true" style="flex-direction: column; align-items: stretch;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <label class="layer-label">
-                    <input type="checkbox" id="chk-poi" />
-                    <span class="color-dot" style="background: #e84393;"></span>
-                    <span>生活圈 POI (通用圖七大分類)</span>
-                  </label>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span class="layer-drag-handle" title="按住拖曳調整順序">⠿</span>
+                    <label class="layer-label">
+                      <input type="checkbox" id="chk-poi" />
+                      <span class="color-dot" style="background: #e84393;"></span>
+                      <span>生活圈 POI (通用圖七大分類)</span>
+                    </label>
+                  </div>
+                  <div class="layer-order-controls">
+                    <button type="button" class="btn-layer-order btn-layer-up" title="圖層上移一層 (圖面疊於上方)">▲</button>
+                    <button type="button" class="btn-layer-order btn-layer-down" title="圖層下移一層 (圖面疊於下方)">▼</button>
+                  </div>
                 </div>
                 <div class="opacity-control">
                   <span>透明度</span>
@@ -313,13 +344,20 @@
               </div>
 
               <!-- 最小統計區人口 -->
-              <div class="layer-item" style="flex-direction: column; align-items: stretch;">
+              <div class="layer-item" data-layer-key="population" data-layer-id="layer-population" draggable="true" style="flex-direction: column; align-items: stretch;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <label class="layer-label">
-                    <input type="checkbox" id="chk-population" />
-                    <span class="color-dot" style="background: #6c5ce7;"></span>
-                    <span>最小統計區人口分佈</span>
-                  </label>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span class="layer-drag-handle" title="按住拖曳調整順序">⠿</span>
+                    <label class="layer-label">
+                      <input type="checkbox" id="chk-population" />
+                      <span class="color-dot" style="background: #6c5ce7;"></span>
+                      <span>最小統計區人口分佈</span>
+                    </label>
+                  </div>
+                  <div class="layer-order-controls">
+                    <button type="button" class="btn-layer-order btn-layer-up" title="圖層上移一層 (圖面疊於上方)">▲</button>
+                    <button type="button" class="btn-layer-order btn-layer-down" title="圖層下移一層 (圖面疊於下方)">▼</button>
+                  </div>
                 </div>
                 <div class="opacity-control">
                   <span>透明度</span>
@@ -329,13 +367,20 @@
               </div>
 
               <!-- 行政區界 (38個行政區) -->
-              <div class="layer-item" style="flex-direction: column; align-items: stretch;">
+              <div class="layer-item" data-layer-key="townBoundary" data-layer-id="layer-town-boundary" draggable="true" style="flex-direction: column; align-items: stretch;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <label class="layer-label">
-                    <input type="checkbox" id="chk-town-boundary" />
-                    <span class="color-dot" style="background: #1e293b;"></span>
-                    <span>區界 (38個行政區)</span>
-                  </label>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span class="layer-drag-handle" title="按住拖曳調整順序">⠿</span>
+                    <label class="layer-label">
+                      <input type="checkbox" id="chk-town-boundary" />
+                      <span class="color-dot" style="background: #1e293b;"></span>
+                      <span>區界 (38個行政區)</span>
+                    </label>
+                  </div>
+                  <div class="layer-order-controls">
+                    <button type="button" class="btn-layer-order btn-layer-up" title="圖層上移一層 (圖面疊於上方)">▲</button>
+                    <button type="button" class="btn-layer-order btn-layer-down" title="圖層下移一層 (圖面疊於下方)">▼</button>
+                  </div>
                 </div>
                 <div class="opacity-control">
                   <span>透明度</span>
@@ -345,13 +390,20 @@
               </div>
 
               <!-- 村里界 (904個村里) -->
-              <div class="layer-item" style="flex-direction: column; align-items: stretch;">
+              <div class="layer-item" data-layer-key="villageBoundary" data-layer-id="layer-village-boundary" draggable="true" style="flex-direction: column; align-items: stretch;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <label class="layer-label">
-                    <input type="checkbox" id="chk-village-boundary" />
-                    <span class="color-dot" style="background: #64748b;"></span>
-                    <span>村里界 (904個村里)</span>
-                  </label>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span class="layer-drag-handle" title="按住拖曳調整順序">⠿</span>
+                    <label class="layer-label">
+                      <input type="checkbox" id="chk-village-boundary" />
+                      <span class="color-dot" style="background: #64748b;"></span>
+                      <span>村里界 (904個村里)</span>
+                    </label>
+                  </div>
+                  <div class="layer-order-controls">
+                    <button type="button" class="btn-layer-order btn-layer-up" title="圖層上移一層 (圖面疊於上方)">▲</button>
+                    <button type="button" class="btn-layer-order btn-layer-down" title="圖層下移一層 (圖面疊於下方)">▼</button>
+                  </div>
                 </div>
                 <div class="opacity-control">
                   <span>透明度</span>

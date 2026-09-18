@@ -10,6 +10,19 @@ class LayerManager {
     this.loadedLayers = new Set();
     this.currentPopup = null;
     this.roadFeatures = []; // 用於全域搜尋路名
+
+    // 定義各圖資對應的所有 MapLibre 子圖層 ID (用於堆疊順序調整)
+    this.layerSublayerMap = {
+      'roadPriority': ['layer-road-priority', 'layer-road-priority-label'],
+      'sidewalk': ['layer-sidewalk', 'layer-sidewalk-outline'],
+      'accidents': ['layer-accidents'],
+      'poi': ['layer-poi'],
+      'population': ['layer-population'],
+      'townBoundary': ['layer-town-boundary-fill', 'layer-town-boundary', 'layer-town-boundary-label'],
+      'villageBoundary': ['layer-village-boundary-fill', 'layer-village-boundary', 'layer-village-boundary-label']
+    };
+
+    this.initLayerOrderControls();
   }
 
   async loadCountyLayers(countyKey) {
@@ -603,6 +616,138 @@ class LayerManager {
     if (this.map.getLayer(`${layerId}-label`)) {
       this.map.setLayoutProperty(`${layerId}-label`, 'visibility', visible ? 'visible' : 'none');
     }
+    
+    if (visible) {
+      this.syncMapLayerOrder();
+    }
+  }
+
+  // 初始化圖層排序控制 (支援拖曳與 ▲ / ▼ 按鈕即時調整地圖圖層疊加順序)
+  initLayerOrderControls() {
+    const listContainer = document.getElementById('layer-control-list');
+    if (!listContainer) return;
+
+    // 1. 綁定 ▲ (上移) 與 ▼ (下移) 按鈕點擊
+    listContainer.addEventListener('click', (e) => {
+      const btnUp = e.target.closest('.btn-layer-up');
+      const btnDown = e.target.closest('.btn-layer-down');
+      if (!btnUp && !btnDown) return;
+
+      e.stopPropagation();
+      const item = (btnUp || btnDown).closest('.layer-item');
+      if (!item) return;
+
+      if (btnUp) {
+        const prev = item.previousElementSibling;
+        if (prev && prev.classList.contains('layer-item')) {
+          listContainer.insertBefore(item, prev);
+          this.syncMapLayerOrder();
+        }
+      } else if (btnDown) {
+        const next = item.nextElementSibling;
+        if (next && next.classList.contains('layer-item')) {
+          listContainer.insertBefore(next, item);
+          this.syncMapLayerOrder();
+        }
+      }
+    });
+
+    // 2. HTML5 拖曳排序 (Drag & Drop)
+    let draggedItem = null;
+
+    listContainer.addEventListener('dragstart', (e) => {
+      const item = e.target.closest('.layer-item');
+      if (!item) return;
+      draggedItem = item;
+      item.classList.add('dragging');
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', item.dataset.layerKey || '');
+      }
+    });
+
+    listContainer.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      const targetItem = e.target.closest('.layer-item');
+      if (!targetItem || targetItem === draggedItem) return;
+
+      listContainer.querySelectorAll('.layer-item').forEach(el => {
+        if (el !== targetItem) el.classList.remove('drag-over');
+      });
+      targetItem.classList.add('drag-over');
+    });
+
+    listContainer.addEventListener('dragleave', (e) => {
+      const targetItem = e.target.closest('.layer-item');
+      if (targetItem) targetItem.classList.remove('drag-over');
+    });
+
+    listContainer.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const targetItem = e.target.closest('.layer-item');
+      if (targetItem && draggedItem && targetItem !== draggedItem) {
+        const rect = targetItem.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (e.clientY < midY) {
+          listContainer.insertBefore(draggedItem, targetItem);
+        } else {
+          listContainer.insertBefore(draggedItem, targetItem.nextElementSibling);
+        }
+        this.syncMapLayerOrder();
+      }
+      listContainer.querySelectorAll('.layer-item').forEach(el => el.classList.remove('drag-over', 'dragging'));
+      draggedItem = null;
+    });
+
+    listContainer.addEventListener('dragend', () => {
+      listContainer.querySelectorAll('.layer-item').forEach(el => el.classList.remove('drag-over', 'dragging'));
+      draggedItem = null;
+    });
+  }
+
+  // 同步 MapLibre 地圖圖層的繪製順序 (使 DOM 列表最上方的圖層在地圖上疊於最上層)
+  syncMapLayerOrder() {
+    const listContainer = document.getElementById('layer-control-list');
+    if (!listContainer || !this.map) return;
+
+    const items = Array.from(listContainer.querySelectorAll('.layer-item'));
+    if (!items.length) return;
+
+    // DOM 順序：index 0 是列表頂層，index N-1 是列表底層
+    // MapLibre 堆疊：後繪製 (或 moveLayer 無 beforeId) 的疊在最上面
+    // 因此由底部 (index N-1) 依序往頂部 (index 0) 調用 moveLayer
+    const reversedItems = items.slice().reverse();
+
+    reversedItems.forEach(item => {
+      const key = item.dataset.layerKey;
+      const subLayers = this.layerSublayerMap ? (this.layerSublayerMap[key] || []) : [];
+
+      subLayers.forEach(subId => {
+        if (this.map.getLayer(subId)) {
+          try {
+            this.map.moveLayer(subId);
+          } catch (e) {}
+        }
+      });
+    });
+
+    // 最後確保分析高亮圖層與繪圖圖層永遠保持在最頂層
+    const topLayers = [
+      'analysis-highlight-poi',
+      'analysis-highlight-accidents-glow',
+      'analysis-highlight-accidents',
+      'analysis-highlight-polygon',
+      'analysis-highlight-outline'
+    ];
+
+    topLayers.forEach(topId => {
+      if (this.map.getLayer(topId)) {
+        try {
+          this.map.moveLayer(topId);
+        } catch (e) {}
+      }
+    });
   }
 
   // 調整圖層透明度 (0.0 ~ 1.0)
