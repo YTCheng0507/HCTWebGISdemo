@@ -18,3 +18,4 @@ scratch*
 !docs/*.docx
 docs/~$*
 ~$*
+*.exe

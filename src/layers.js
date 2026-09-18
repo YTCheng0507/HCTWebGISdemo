@@ -23,32 +23,14 @@ class LayerManager {
 
     const layersConf = countyConf.layers;
 
-    // 1. 第一優先：載入 12 公尺以上道路改善成果線圖層 (僅 3.9 MB / gzip 1.1 MB，即時繪製全圖並建立路名搜尋索引)
+    // 1. 核心載入：僅載入 12 公尺以上道路人本交通評估路網 (僅 1.1 MB Gzip，秒級建立全域路網與搜尋索引)
     if (layersConf.roadPriority) {
       await this.loadSpecificLayer('roadPriority', layersConf.roadPriority.visible);
     }
 
-    // 2. 第二優先：非同步背景載入人行道實體圖層 (由 MapLibre WebWorker 背景加載，不阻塞主線程 UI)
-    if (layersConf.sidewalk && layersConf.sidewalk.visible) {
-      this.loadSpecificLayer('sidewalk', true).catch(err => {
-        console.warn('[LayerManager] 人行道圖層非同步載入異常:', err);
-      });
-    }
-
-    // 3. 平滑非同步預載其餘預設關閉圖層 (依序排隊，避免搶佔主線程與網路資源)
-    const lazyKeys = ['townBoundary', 'villageBoundary', 'accidents', 'poi', 'population'];
-    let delay = 250;
-    for (const key of lazyKeys) {
-      if (layersConf[key]) {
-        setTimeout(() => {
-          if (!this.loadedLayers.has(layersConf[key].id)) {
-            this.loadSpecificLayer(key, false).catch(() => {});
-          }
-        }, delay);
-        delay += 250;
-      }
-    }
-    console.log(`[LayerManager] ${countyConf.name} 核心圖層已啟動載入！`);
+    // 2. 其餘圖層（人行道實體普查、村里界、人口、POI、事故）全面落實「隨選即時載入 (On-Demand Loading)」
+    // 當使用者於側欄勾選該圖層 Checkbox 時，系統才即時非同步下載並快取，杜絕首頁預載浪費流量
+    console.log(`[LayerManager] ${countyConf.name} 核心路網載入完成！(其餘圖層採用隨選即時載入模式)`);
   }
 
   isLayerLoaded(layerId) {

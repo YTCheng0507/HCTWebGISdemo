@@ -40,7 +40,7 @@ const APP_CONFIG = {
           id: "layer-sidewalk",
           name: "人行道實體普查圖資 (國土署 100% 原始幾何)",
           file: "sidewalk.geojson",
-          visible: true,
+          visible: false,
           type: "fill",
           defaultOpacity: 0.75
         },
